@@ -1,0 +1,19 @@
+.DS_Store
+
+# Python environments and caches
+.venv/
+.venv.*/
+.pycache/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+.coverage.*
+
+# Local runtime outputs
+data/db/
+data/downloads/
+data/transcripts/
+data/models/
+data/summaries/
+data/shownotes/
