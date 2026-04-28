@@ -9,6 +9,7 @@
 .pytest_cache/
 .coverage
 .coverage.*
+list.md
 
 # Local runtime outputs
 data/db/
@@ -17,3 +18,4 @@ data/transcripts/
 data/models/
 data/summaries/
 data/shownotes/
+
