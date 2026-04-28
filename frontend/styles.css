@@ -717,12 +717,14 @@ button:disabled {
 }
 
 .modal-card--summary {
-  width: min(100%, 860px);
-  max-width: 860px;
-  height: min(78vh, 900px);
+  width: min(75vw, 1170px);
+  max-width: none;
+  height: min(calc(100vh - 64px), 1080px);
+  margin: 24px auto 0;
+  padding: 34px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
-  gap: 16px;
+  gap: 20px;
 }
 
 .modal-summary__header {
