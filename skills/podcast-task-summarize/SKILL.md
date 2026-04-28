@@ -1,37 +1,45 @@
 ---
 name: podcast-task-summarize
-description: Use when generating or updating the summarize file for an existing Podcast Notebook task, especially when the user asks to summarize a podcast episode from its shownotes and transcript, then write the summarize file path back into the SQLite tasks.summarize column.
+description: Use when generating, regenerating, revising, or analyzing a Podcast Notebook task summary from its cleaned shownotes and ASR transcript, then writing the Markdown summary file path back into the SQLite tasks.summarize column.
 ---
 
 # Podcast Task Summarize
 
 ## Purpose
 
-Generate a reusable episode summary for an existing task in this project, store it as a Markdown file, and update the task row so the UI can show it through the `查看 Summarize` button.
+Generate or update a reusable Markdown summary for an existing Podcast Notebook task.
 
-Use this when the user asks to create, regenerate, or revise `summarize` for a task already present in the Podcast Notebook database.
+This is the single podcast summary workflow for this project. It covers:
 
-## Project Storage Contract
+- locating the exact DB task row
+- reading cleaned shownotes and the ASR transcript
+- analyzing the full transcript despite ASR noise
+- choosing an appropriate summary structure
+- writing the summary file under `data/summaries/`
+- updating `tasks.summarize`
+- verifying the API can read the summary
+
+## Storage Contract
 
 - SQLite database: `data/db/podcast_notebook.db`
 - Table: `tasks`
-- Task lookup: usually by `id`, exact `episode_title`, or a title keyword such as `Vol.254`
 - Source columns:
-  - `shownotes`: absolute path to the cleaned shownotes text file
-  - `output_txt_path`: absolute path to the ASR transcript text file
+  - `shownotes`: absolute path to cleaned shownotes text
+  - `output_txt_path`: absolute path to ASR transcript text
+  - `audio_file_path`: audio path for duration checks when available
 - Destination column:
-  - `summarize`: absolute path to the generated Markdown summarize file
+  - `summarize`: absolute path to generated Markdown summary
 - Destination directory:
   - `data/summaries/`
 - Recommended filename:
   - `<sanitized-episode-title>-summarize.md`
-  - Match the project's existing filename style, for example `Vol254-大牌的创意总监为什么成了高危职业-summarize.md`.
+  - Match existing project filename style.
 
 ## Workflow
 
-### 1. Locate the task
+### 1. Locate The Exact Task
 
-Use the project DB helpers when possible:
+Use project DB helpers where possible:
 
 ```bash
 .venv/bin/python - <<'PY'
@@ -41,11 +49,13 @@ from backend.db import connect_db
 keyword = "Vol.254"
 with connect_db(DB_PATH) as con:
     rows = con.execute("""
-        SELECT id, podcast_title, episode_title, shownotes, summarize, output_txt_path, status
+        SELECT id, podcast_title, episode_title, status, shownotes,
+               summarize, output_txt_path, audio_file_path
         FROM tasks
         WHERE episode_title LIKE ?
         ORDER BY id DESC
     """, (f"%{keyword}%",)).fetchall()
+
 for row in rows:
     print(dict(row))
 PY
@@ -53,86 +63,119 @@ PY
 
 Before writing, verify:
 
-- `status` is usually `completed`
-- `shownotes` points to an existing file
-- `output_txt_path` points to an existing transcript file
-- `summarize` may be empty or may point to an existing file to overwrite only if the user asked to regenerate/revise it
-- episode duration, when available from the audio file or metadata, so the summary length can follow the duration rule
+- Use the exact `id`; never update by title alone if duplicates exist.
+- `shownotes` exists when available.
+- `output_txt_path` exists.
+- `summarize` may be empty or may point to an existing file.
+- Overwrite an existing summary only when the user asks to regenerate or revise it.
 
-### 2. Read sources
+### 2. Read Sources
 
-Use the transcript as the primary source and shownotes as the correction source.
+Principle: full transcript first, shownotes second, inference last.
 
-- Read the full transcript, not just the start.
-- Use shownotes to correct ASR mistakes in episode title, section timeline, people, brands, publications, and product names.
-- Expect ASR mistakes in Chinese and English names. Prefer spellings from shownotes when available.
-- If the transcript is long, scan by chunks across the whole file and search for repeated keywords to verify coverage.
-- If `audio_file_path` exists, estimate duration with `ffprobe`/`ffmpeg` when available. If duration cannot be read, estimate from transcript length and state the assumption internally before drafting.
+- Treat `output_txt_path` as the primary source.
+- Read enough of the full transcript to cover beginning, middle, and end; never summarize only from the opening segment.
+- For very long transcripts, scan by chunks across the whole file, then re-read dense or ambiguous sections.
+- Use `shownotes` to correct episode title, chapter timeline, people, brands, publications, products, places, and English names.
+- Do not let shownotes replace the transcript; they are correction and framing metadata.
 
-### 3. Extract before drafting
+### 3. Handle ASR Noise
 
-Create an internal extraction inventory before writing the final summary:
+- Expect wrong Chinese homophones, broken punctuation, wrong speaker turns, and malformed English names.
+- Prefer repeated transcript mentions plus shownotes spelling when resolving terms.
+- Normalize obvious ASR errors silently when confidence is high.
+- Mark uncertainty only when a term or claim cannot be resolved from context and shownotes.
+- Separate explicitly stated claims from reasonable synthesis.
+
+### 4. Extract Before Drafting
+
+Create an internal extraction inventory before writing:
 
 - episode thesis
-- main outline or topic sequence
-- major claims or viewpoints
-- concrete examples, companies, people, products, or cases
+- topic sequence or outline
+- major claims and viewpoints
+- concrete examples, companies, people, products, tools, places, or cases
 - conclusions and caveats
-- uncertain terms likely caused by ASR errors
+- unclear terms likely caused by ASR errors
 
-Do not include this inventory in the final file unless the user asks.
+For every important example, extract an internal example card:
 
-### 4. Draft requirements
+- What exactly happened: the person, company, product, place, or scene.
+- Key mechanism: why the example works or matters, such as monopoly, information gap, cost structure, channel, regulation, user psychology, technology, or timing.
+- Claim supported: which episode argument this example proves or complicates.
+- Memorable details: concrete numbers, counterintuitive facts, turning points, execution details, or constraints.
+- Boundary or risk: whether the example depends on gray areas, fraud, regulation, luck, non-repeatable context, or ethical tradeoffs.
 
-The summarize file should be Markdown. Unless the user asks otherwise, choose length by episode duration:
+Do not write examples as labels only. A reader should understand the essence of a key example without needing the original audio.
 
-- If duration is 1.5 hours or less: keep the summary under 1000 Chinese characters.
-- If duration is longer than 1.5 hours: write more than 1500 and less than 2000 Chinese characters.
-- If duration is unknown but the transcript is clearly long-form, use judgment from transcript size and topic density; prefer the longer range when the episode likely exceeds 1.5 hours.
+For focused user requests, such as “整理这几期的整体脉络” or “提取 Codex 项目”, first create a candidate inventory from the whole transcript or all relevant summaries, then synthesize.
 
-Default structure:
+### 5. Choose Summary Template
 
-```markdown
-# <episode title>
+Classify the episode from `podcast_title`, `episode_title`, shownotes, and transcript. Use the primary type to choose structure. If an episode spans multiple types, use the primary template and borrow only the needed secondary section. If uncertain, use the default template.
 
-## 核心判断
+- **Commercial case / method**: use `核心判断 / 机制脉络 / 关键案例 / 可复用框架 / 风险边界`.
+  - Focus on how money is made, what control point or arbitrage exists, why others miss it, and what is or is not repeatable.
+  - Examples must explain the business mechanism, not just name the company or case.
+- **Finance / investing**: use `核心判断 / 市场变量 / 资产或行业观点 / 操作启发 / 风险提示`.
+  - Focus on variables such as rates, valuation, earnings, policy, liquidity, fund flows, time horizon, and risk preference.
+  - Examples must explain which variable changed the investment judgment.
+- **Tech interview / AI practice**: use `核心判断 / 方法框架 / 落地流程或案例 / 对企业或个人的启发 / 局限`.
+  - Focus on the problem context, workflow, implementation pattern, measurable result, and limitations.
+  - Examples must explain how the technology entered the workflow and what problem it solved.
+- **Culture / history / food**: use `主题线索 / 历史与地方脉络 / 关键材料或人物 / 文化含义 / 结论`.
+  - Focus on historical context, locality, materials, people, memory, and how meanings changed over time.
+  - Examples must explain why a dish, person, place, or object matters; avoid turning the summary into a name list.
+- **Explainer / beginner education**: use `概念定义 / 类比解释 / 关键机制 / 适用人群 / 常见误区`.
+  - Focus on making the concept understandable and actionable.
+  - Examples must clarify the concept, not distract from it.
+- **Default**: `核心判断 / 大纲 / 主要例子 / 结论`
 
-<one concise paragraph>
+Do not over-fit the template. Preserve the episode's actual logic.
 
-## 大纲
+### 6. Draft Requirements
 
-1. <main thread>
-2. <main thread>
-3. <main thread>
+The summary file must be Markdown.
 
-## 主要例子
+Length rule:
 
-- **<example>**：<why it matters>
-- **<example>**：<why it matters>
-
-## 结论
-
-<one concise paragraph>
-```
+- Keep the summary under 3000 Chinese characters.
+- Do not force the summary toward 3000 characters. Use only as much length as the episode's information density needs.
+- A simple or narrow episode can be 800-1200 Chinese characters.
+- A typical substantial episode should usually be 1200-2200 Chinese characters.
+- A dense episode with many important examples, concepts, or arguments can be 2200-3000 Chinese characters.
+- Episode duration is only a signal. Prefer information density over duration: number of distinct arguments, case complexity, required background, and example richness.
 
 Content requirements:
 
-- Keep the outline, main viewpoints, and main examples.
-- Ground claims in the transcript; use shownotes for correction and framing.
-- Normalize obvious ASR errors silently when confidence is high.
-- Mark uncertainty only if a term or claim cannot be resolved from context and shownotes.
-- Avoid ad copy unless it materially affects the episode content.
-- Do not over-summarize into generic business lessons; preserve the episode's specific logic.
+- Preserve outline, main viewpoints, and major examples.
+- Ground claims in the transcript.
+- Use shownotes for correction and framing.
+- Avoid ad copy unless it materially affects episode content.
+- Avoid generic takeaways that erase the episode's specific cases.
+- Prioritize example quality over example count. Expand the most important examples; omit minor examples if they only add noise.
+- Do not repeat the same example list across sections.
 
-### 5. Write the file
+Writing structure rules:
+
+- Each section must have a distinct job.
+- `核心判断` should state the episode's main claim and significance. Do not list all examples here.
+- `机制脉络` or `大纲` should explain the argument flow. Do not expand case details here.
+- `关键案例` or `主要例子` is where examples should be explained in depth using the example card.
+- `结论`, `启发`, or `风险边界` should synthesize and judge. Do not re-summarize the example list.
+- If an example is fully explained in `关键案例`, other sections may refer to it only briefly when needed for reasoning.
+- Avoid repeated phrasing under different headings. If two sections say the same thing, merge or delete one.
+- Prefer dense, specific prose over broad summaries. The reader should finish with a clear sense of what happened, why it mattered, and what can or cannot be generalized.
+
+### 7. Write The Summary File
 
 Create or update the Markdown file under `data/summaries/`.
 
 Use `apply_patch` for manual file creation or edits.
 
-### 6. Update the database
+### 8. Update The Database
 
-After the file is written, update the exact task row's `summarize` column to the absolute file path:
+Update only the exact task row:
 
 ```bash
 .venv/bin/python - <<'PY'
@@ -148,11 +191,9 @@ print(updated["summarize"])
 PY
 ```
 
-Never update by title alone if multiple matching rows exist. Resolve the exact `id` first.
+### 9. Verify
 
-### 7. Verify
-
-Verify both DB and API:
+Verify DB and API:
 
 ```bash
 .venv/bin/python - <<'PY'
@@ -181,8 +222,8 @@ Expected:
 Tell the user:
 
 - which task id was updated
-- the summarize file path
+- where the summary file was written
 - that `tasks.summarize` was updated
 - whether `/api/tasks/{id}/summarize` returned `200`
 
-Keep the response concise and mention that the list page should show `查看 Summarize` after refresh.
+Keep the response concise.
