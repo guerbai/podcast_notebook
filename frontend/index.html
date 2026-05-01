@@ -6,7 +6,7 @@
     <title>播客工作台</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.2.1/dist/styles/webawesome.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.2.1/dist/styles/themes/default.css" />
-    <link rel="stylesheet" href="/static/styles.css?v=20260428-modal" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260501-results" />
     <script type="module" src="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.2.1/dist-cdn/webawesome.loader.js"></script>
   </head>
   <body>
@@ -42,83 +42,85 @@
     <main class="page">
       <header class="masthead">
         <div class="masthead-copy">
-          <p class="eyebrow">播客工作台</p>
-          <h1>播客工作台</h1>
+          <p class="eyebrow">Podcast Notebook</p>
+          <h1>播客研究工作台</h1>
           <p class="lede">
-            搜索节目、定位单集、发起转写任务，再把长音频整理成可阅读的全文稿，并把整个处理过程留在任务台账里。
+            搜索节目、定位单集、发起转写任务，把长音频整理成可阅读、可回溯的本地资料。
           </p>
         </div>
         <aside class="masthead-note">
-          <p class="note-label">当前主题</p>
-          <p class="note-title">转写编辑室</p>
+          <p class="note-label">Local Archive</p>
+          <p class="note-title">转写 · Shownotes · Summarize</p>
           <p class="note-body">
-            先找到单集，再执行下载和转写。重复的任务不会再堆叠，所有进展、文件和历史记录都在这里留痕。
+            任务不会重复堆叠；下载、转写、文件路径和最近日志都保留在同一个台账里。
           </p>
         </aside>
       </header>
 
-      <section class="workflow-stack">
-        <article class="sheet">
-          <div class="section-heading">
-            <p class="section-index">01</p>
+      <div class="workspace-grid">
+        <section class="workflow-stack" aria-label="播客检索流程">
+          <article class="sheet">
+            <div class="section-heading">
+              <p class="section-index">01</p>
+              <div>
+                <h2>搜索播客</h2>
+                <p>输入播客名称，先找到正确的节目源。选中后会自动展示最近 10 期。</p>
+              </div>
+            </div>
+            <label class="field">
+              <span>播客名称</span>
+              <input id="podcast-query" type="text" placeholder="大内密谈" />
+            </label>
+            <button id="search-podcasts" type="button" class="primary-button">搜索播客</button>
+            <div id="podcast-results" class="results"></div>
+          </article>
+
+          <article class="sheet episode-browser">
+            <div class="section-heading">
+              <p class="section-index">02</p>
+              <div>
+                <h2>选择单集</h2>
+                <p>先看最近 10 期，再用关键词在同一个列表里继续筛选。</p>
+              </div>
+            </div>
+            <div class="episode-browser__header">
+              <p id="selected-podcast" class="selected"></p>
+              <p id="episode-subhead" class="episode-subhead">选中播客后，这里会自动展示最近 10 期。</p>
+            </div>
+            <label class="field">
+              <span>单集关键词</span>
+              <input id="episode-query" type="text" placeholder="Codex" />
+            </label>
+            <div class="episode-toolbar">
+              <button id="search-episodes" type="button" class="primary-button">搜索单集</button>
+              <span class="episode-toolbar__hint">最近 10 期</span>
+            </div>
+            <div id="episode-results" class="results"></div>
+          </article>
+        </section>
+
+        <section class="archive-sheet">
+          <div class="section-heading section-heading-wide">
+            <p class="section-index">03</p>
             <div>
-              <h2>搜索播客</h2>
-              <p>输入播客名称，先找到正确的节目源。选中后会自动展示最近 10 期。</p>
+              <h2>任务台账</h2>
+              <p>每一次尝试、每一份成稿、每一条失败记录都会留在这里；你也可以随时删除或重新开始某个任务。</p>
             </div>
           </div>
-          <label class="field">
-            <span>播客名称</span>
-            <input id="podcast-query" type="text" placeholder="大内密谈" />
-          </label>
-          <button id="search-podcasts" type="button" class="primary-button">搜索播客</button>
-          <div id="podcast-results" class="results"></div>
-        </article>
-
-        <article class="sheet episode-browser">
-          <div class="section-heading">
-            <p class="section-index">02</p>
-            <div>
-              <h2>选择单集</h2>
-              <p>先看最近 10 期，再用关键词在同一个列表里继续筛选。</p>
-            </div>
+          <div class="task-filters" aria-label="任务筛选">
+            <wa-select id="task-podcast-filter" placeholder="播客名" value="">
+              <wa-option value="">全部播客</wa-option>
+            </wa-select>
+            <wa-select id="task-status-filter" placeholder="状态" value="">
+              <wa-option value="">状态</wa-option>
+              <wa-option value="in_progress">进行中</wa-option>
+              <wa-option value="completed">已完成</wa-option>
+            </wa-select>
           </div>
-          <div class="episode-browser__header">
-            <p id="selected-podcast" class="selected"></p>
-            <p id="episode-subhead" class="episode-subhead">选中播客后，这里会自动展示最近 10 期。</p>
-          </div>
-          <label class="field">
-            <span>单集关键词</span>
-            <input id="episode-query" type="text" placeholder="Codex" />
-          </label>
-          <div class="episode-toolbar">
-            <button id="search-episodes" type="button" class="primary-button">搜索单集</button>
-            <span class="episode-toolbar__hint">最近 10 期</span>
-          </div>
-          <div id="episode-results" class="results"></div>
-        </article>
-      </section>
-
-      <section class="archive-sheet">
-        <div class="section-heading section-heading-wide">
-          <p class="section-index">03</p>
-          <div>
-            <h2>任务台账</h2>
-            <p>每一次尝试、每一份成稿、每一条失败记录都会留在这里；你也可以随时删除或重新开始某个任务。</p>
-          </div>
-        </div>
-        <div class="task-filters" aria-label="任务筛选">
-          <wa-select id="task-podcast-filter" placeholder="播客名" value="">
-            <wa-option value="">全部播客</wa-option>
-          </wa-select>
-          <wa-select id="task-status-filter" placeholder="状态" value="">
-            <wa-option value="">状态</wa-option>
-            <wa-option value="in_progress">进行中</wa-option>
-            <wa-option value="completed">已完成</wa-option>
-          </wa-select>
-        </div>
-        <div id="task-results" class="task-results"></div>
-      </section>
+          <div id="task-results" class="task-results"></div>
+        </section>
+      </div>
     </main>
-    <script type="module" src="/static/app.js"></script>
+    <script type="module" src="/static/app.js?v=20260501-results"></script>
   </body>
 </html>

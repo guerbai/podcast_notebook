@@ -54,3 +54,16 @@ def test_frontend_includes_split_progress_and_layout_markers():
     assert "detail.summarize" in script
     assert "/shownotes" in script
     assert "/summarize" in script
+
+
+def test_podcast_search_results_use_stable_layout():
+    html = Path("frontend/index.html").read_text(encoding="utf-8")
+    script = Path("frontend/app.js").read_text(encoding="utf-8")
+    styles = Path("frontend/styles.css").read_text(encoding="utf-8")
+
+    assert "/static/app.js?v=" in html
+    assert "/static/styles.css?v=" in html
+    assert "list-item podcast-result" in script
+    assert ".list-item {" in styles
+    assert "align-items: flex-start;" in styles
+    assert "justify-content: flex-start;" in styles
