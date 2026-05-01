@@ -232,7 +232,7 @@ async function searchPodcasts() {
 
 function renderPodcastResult(item) {
   const button = document.createElement("button");
-  button.className = "list-item";
+  button.className = "list-item podcast-result";
   button.type = "button";
   button.innerHTML = `
     <span class="kicker">播客</span>
