@@ -47,11 +47,27 @@ PYTHON_BIN=/opt/homebrew/bin/python3.12 bash scripts/bootstrap_runtime.sh
 
 ## Run the app
 
+Local-only:
+
 ```bash
 .venv/bin/uvicorn backend.app:create_app --factory --reload
 ```
 
 Then open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+
+LAN-accessible:
+
+```bash
+.venv/bin/uvicorn backend.app:create_app --factory --reload --host 0.0.0.0 --port 58049
+```
+
+Then open `http://<your-lan-ip>:58049` from another device on the same network. On macOS you can find the LAN IP with:
+
+```bash
+ifconfig | grep "inet " | grep -v 127.0.0.1
+```
+
+Example: [http://192.168.1.20:58049](http://192.168.1.20:58049).
 
 ## Notes
 

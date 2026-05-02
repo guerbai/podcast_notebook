@@ -63,9 +63,13 @@ class _ShownotesTextExtractor(HTMLParser):
 
 
 def enqueue_task(payload: TaskCreate, db_path: str | Path, executor: Executor) -> dict[str, Any]:
-    task_payload = _ensure_shownotes(payload.model_dump())
+    raw_payload = payload.model_dump()
     existing = find_task_by_episode(payload.podcast_title, payload.episode_title, db_path)
     if existing is not None:
+        if not existing.get("shownotes"):
+            task_payload = _ensure_shownotes(raw_payload)
+        else:
+            task_payload = raw_payload
         if not existing.get("shownotes") and task_payload.get("shownotes"):
             existing = update_task(existing["id"], {"shownotes": task_payload["shownotes"]}, db_path)
         return {
@@ -74,6 +78,7 @@ def enqueue_task(payload: TaskCreate, db_path: str | Path, executor: Executor) -
             "message": "已定位到现有任务。",
         }
 
+    task_payload = _ensure_shownotes(raw_payload)
     task = create_task(task_payload, db_path)
     add_task_event(task["id"], "Task queued", db_path=db_path)
     executor.submit(run_task, task["id"], db_path, executor)
@@ -242,9 +247,9 @@ def _fetch_shownotes(payload: dict[str, Any]) -> str:
 
     for episode in episodes:
         if episode_guid and episode.get("guid") == episode_guid:
-            return episode.get("summary", "")
+            return episode.get("shownotes", "")
         if episode.get("title") == episode_title:
-            return episode.get("summary", "")
+            return episode.get("shownotes", "")
     return ""
 
 
@@ -387,7 +392,7 @@ def _raise_if_cancel_requested(task_id: int, db_path: str | Path) -> None:
 
 
 def _cleanup_task_files(task: dict[str, Any]) -> None:
-    for file_key in ("audio_file_path", "output_txt_path", "summary_md_path", "shownotes", "summarize"):
+    for file_key in ("audio_file_path", "output_txt_path", "summary_md_path", "shownotes", "summarize", "summarize_en"):
         file_path = task.get(file_key)
         if not file_path:
             continue

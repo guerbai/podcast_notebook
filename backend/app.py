@@ -25,6 +25,15 @@ ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT_DIR / "frontend"
 
 
+def _episode_list_item(episode: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "title": episode.get("title", ""),
+        "guid": episode.get("guid"),
+        "audio_url": episode.get("audio_url", ""),
+        "published": episode.get("published", ""),
+    }
+
+
 def create_app(db_path: str | Path | None = None, executor: ThreadPoolExecutor | None = None) -> FastAPI:
     app = FastAPI(title="Podcast Notebook")
     app.state.db_path = Path(db_path) if db_path is not None else None
@@ -45,9 +54,11 @@ def create_app(db_path: str | Path | None = None, executor: ThreadPoolExecutor |
         return {"items": results}
 
     @app.get("/api/search/episodes")
-    def episode_search(rss_url: str, q: str = "") -> dict[str, list[dict[str, Any]]]:
+    def episode_search(rss_url: str, q: str = "", limit: int | None = None) -> dict[str, list[dict[str, Any]]]:
         results = fetch_episodes(rss_url, q)
-        return {"items": results}
+        if limit is not None and limit > 0:
+            results = results[:limit]
+        return {"items": [_episode_list_item(episode) for episode in results]}
 
     @app.get("/api/tasks")
     def task_list() -> dict[str, list[dict[str, Any]]]:
@@ -81,8 +92,9 @@ def create_app(db_path: str | Path | None = None, executor: ThreadPoolExecutor |
         return shownotes
 
     @app.get("/api/tasks/{task_id}/summarize")
-    def task_summarize(task_id: int) -> dict[str, Any]:
-        summarize = get_task_text_file(task_id, "summarize", app.state.db_path)
+    def task_summarize(task_id: int, lang: str = "zh-CN") -> dict[str, Any]:
+        field = "summarize_en" if lang == "en" else "summarize"
+        summarize = get_task_text_file(task_id, field, app.state.db_path)
         if summarize is None:
             raise HTTPException(status_code=404, detail="Summarize not found")
         return summarize

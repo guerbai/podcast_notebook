@@ -1,13 +1,13 @@
 ---
 name: podcast-task-summarize
-description: Use when generating, regenerating, revising, or analyzing a Podcast Notebook task summary from its cleaned shownotes and ASR transcript, then writing the Markdown summary file path back into the SQLite tasks.summarize column.
+description: Use when generating, regenerating, revising, or analyzing Podcast Notebook task summaries from cleaned shownotes and ASR transcript, then writing Chinese and English Markdown summary file paths back into SQLite tasks.summarize and tasks.summarize_en.
 ---
 
 # Podcast Task Summarize
 
 ## Purpose
 
-Generate or update a reusable Markdown summary for an existing Podcast Notebook task.
+Generate or update reusable Chinese and English Markdown summaries for an existing Podcast Notebook task.
 
 This is the single podcast summary workflow for this project. It covers:
 
@@ -15,9 +15,9 @@ This is the single podcast summary workflow for this project. It covers:
 - reading cleaned shownotes and the ASR transcript
 - analyzing the full transcript despite ASR noise
 - choosing an appropriate summary structure
-- writing the summary file under `data/summaries/`
-- updating `tasks.summarize`
-- verifying the API can read the summary
+- writing both summary files under `data/summaries/`
+- updating `tasks.summarize` and `tasks.summarize_en`
+- verifying the API can read both summaries
 
 ## Storage Contract
 
@@ -27,12 +27,14 @@ This is the single podcast summary workflow for this project. It covers:
   - `shownotes`: absolute path to cleaned shownotes text
   - `output_txt_path`: absolute path to ASR transcript text
   - `audio_file_path`: audio path for duration checks when available
-- Destination column:
-  - `summarize`: absolute path to generated Markdown summary
+- Destination columns:
+  - `summarize`: absolute path to generated Chinese Markdown summary
+  - `summarize_en`: absolute path to generated English Markdown summary
 - Destination directory:
   - `data/summaries/`
-- Recommended filename:
-  - `<sanitized-episode-title>-summarize.md`
+- Recommended filenames:
+  - Chinese: `<sanitized-episode-title>-summarize.md`
+  - English: `<sanitized-episode-title>-summarize.en.md`
   - Match existing project filename style.
 
 ## Workflow
@@ -50,7 +52,7 @@ keyword = "Vol.254"
 with connect_db(DB_PATH) as con:
     rows = con.execute("""
         SELECT id, podcast_title, episode_title, status, shownotes,
-               summarize, output_txt_path, audio_file_path
+               summarize, summarize_en, output_txt_path, audio_file_path
         FROM tasks
         WHERE episode_title LIKE ?
         ORDER BY id DESC
@@ -66,8 +68,8 @@ Before writing, verify:
 - Use the exact `id`; never update by title alone if duplicates exist.
 - `shownotes` exists when available.
 - `output_txt_path` exists.
-- `summarize` may be empty or may point to an existing file.
-- Overwrite an existing summary only when the user asks to regenerate or revise it.
+- `summarize` and `summarize_en` may be empty or may point to existing files.
+- Overwrite existing summaries only when the user asks to regenerate or revise them.
 
 ### 2. Read Sources
 
@@ -169,7 +171,9 @@ Writing structure rules:
 
 ### 7. Write The Summary File
 
-Create or update the Markdown file under `data/summaries/`.
+Create or update both Markdown files under `data/summaries/`.
+
+The English summary should carry the same facts, structure, and level of specificity as the Chinese version. It does not need to translate original shownotes; shownotes remain the podcast's original returned text.
 
 Use `apply_patch` for manual file creation or edits.
 
@@ -184,10 +188,15 @@ from backend.db import update_task
 
 task_id = 21
 summarize_path = "/Users/hubao/my/podcast_notebook/data/summaries/Vol254-大牌的创意总监为什么成了高危职业-summarize.md"
-updated = update_task(task_id, {"summarize": summarize_path}, DB_PATH)
+summarize_en_path = "/Users/hubao/my/podcast_notebook/data/summaries/Vol254-大牌的创意总监为什么成了高危职业-summarize.en.md"
+updated = update_task(task_id, {
+    "summarize": summarize_path,
+    "summarize_en": summarize_en_path,
+}, DB_PATH)
 print(updated["id"])
 print(updated["episode_title"])
 print(updated["summarize"])
+print(updated["summarize_en"])
 PY
 ```
 
@@ -208,13 +217,21 @@ data = resp.json()
 print(data["title"])
 print(data["path"])
 print(data["content"][:120].replace("\n", " "))
+
+resp_en = client.get(f"/api/tasks/{task_id}/summarize?lang=en")
+print(resp_en.status_code)
+data_en = resp_en.json()
+print(data_en["title"])
+print(data_en["path"])
+print(data_en["content"][:120].replace("\n", " "))
 PY
 ```
 
 Expected:
 
 - status code `200`
-- `path` equals the `tasks.summarize` file path
+- first `path` equals the `tasks.summarize` file path
+- second `path` equals the `tasks.summarize_en` file path
 - content starts with the generated Markdown title
 
 ## Completion Response
@@ -222,8 +239,8 @@ Expected:
 Tell the user:
 
 - which task id was updated
-- where the summary file was written
-- that `tasks.summarize` was updated
-- whether `/api/tasks/{id}/summarize` returned `200`
+- where the Chinese and English summary files were written
+- that `tasks.summarize` and `tasks.summarize_en` were updated
+- whether `/api/tasks/{id}/summarize` and `/api/tasks/{id}/summarize?lang=en` returned `200`
 
 Keep the response concise.

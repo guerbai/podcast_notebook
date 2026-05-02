@@ -18,6 +18,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     audio_url TEXT NOT NULL,
     shownotes TEXT NOT NULL DEFAULT '',
     summarize TEXT NOT NULL DEFAULT '',
+    summarize_en TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'queued',
     progress_stage TEXT NOT NULL DEFAULT 'queued',
     progress_percent REAL NOT NULL DEFAULT 0,
@@ -53,6 +54,7 @@ TASK_MIGRATIONS = {
     "summary_md_path": "ALTER TABLE tasks ADD COLUMN summary_md_path TEXT",
     "shownotes": "ALTER TABLE tasks ADD COLUMN shownotes TEXT NOT NULL DEFAULT ''",
     "summarize": "ALTER TABLE tasks ADD COLUMN summarize TEXT NOT NULL DEFAULT ''",
+    "summarize_en": "ALTER TABLE tasks ADD COLUMN summarize_en TEXT NOT NULL DEFAULT ''",
 }
 
 
@@ -140,6 +142,7 @@ def create_task(task: dict[str, Any], db_path: str | Path | None = None) -> dict
         "audio_url": task["audio_url"],
         "shownotes": task.get("shownotes", ""),
         "summarize": task.get("summarize", ""),
+        "summarize_en": task.get("summarize_en", ""),
         "status": task.get("status", "queued"),
         "progress_stage": task.get("progress_stage", "queued"),
         "progress_percent": task.get("progress_percent", 0.0),
@@ -160,13 +163,13 @@ def create_task(task: dict[str, Any], db_path: str | Path | None = None) -> dict
             """
             INSERT INTO tasks (
                 podcast_title, rss_url, episode_title, episode_guid, audio_url,
-                shownotes, summarize, status, progress_stage, progress_percent, download_percent,
+                shownotes, summarize, summarize_en, status, progress_stage, progress_percent, download_percent,
                 transcription_percent, cancel_requested, pending_action, audio_file_path,
                 output_txt_path, summary_md_path, error_message, created_at, started_at, finished_at
             )
             VALUES (
                 :podcast_title, :rss_url, :episode_title, :episode_guid, :audio_url,
-                :shownotes, :summarize, :status, :progress_stage, :progress_percent, :download_percent,
+                :shownotes, :summarize, :summarize_en, :status, :progress_stage, :progress_percent, :download_percent,
                 :transcription_percent, :cancel_requested, :pending_action, :audio_file_path,
                 :output_txt_path, :summary_md_path, :error_message, :created_at, :started_at, :finished_at
             )
