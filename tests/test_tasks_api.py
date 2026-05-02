@@ -69,7 +69,7 @@ def test_create_task_fetches_shownotes_when_payload_omits_them(tmp_path, monkeyp
                 "title": "Vol.254 大牌的创意总监为什么成了高危职业？",
                 "guid": "xmly_track_972008291",
                 "audio_url": "http://example.com/audio.mp3",
-                "summary": "<p>服务端补抓 shownotes。</p>",
+                "shownotes": "<p>服务端补抓 shownotes。</p>",
             }
         ],
     )
@@ -131,6 +131,33 @@ def test_create_task_returns_existing_result_for_duplicate(tmp_path):
     assert first.json()["result"] == "created"
     assert second.json()["result"] == "existing"
     assert second.json()["task"]["id"] == first.json()["task"]["id"]
+
+
+def test_existing_task_with_shownotes_does_not_refetch_shownotes(tmp_path, monkeypatch):
+    import backend.tasks as task_module
+
+    monkeypatch.setattr(task_module, "SHOWNOTES_DIR", tmp_path / "shownotes")
+    client = TestClient(create_app(db_path=tmp_path / "app.db", executor=NoopExecutor()))
+    payload = {
+        "podcast_title": "商业就是这样",
+        "rss_url": "http://example.com/feed.xml",
+        "episode_title": "商业小样38 | 拿什么回馈你，我的股东",
+        "audio_url": "http://example.com/audio.mp3",
+        "shownotes": "已有 shownotes。",
+    }
+    first = client.post("/api/tasks", json=payload)
+    calls = []
+    monkeypatch.setattr(task_module, "fetch_episodes", lambda rss_url, keyword="": calls.append((rss_url, keyword)) or [])
+
+    second = client.post(
+        "/api/tasks",
+        json={key: value for key, value in payload.items() if key != "shownotes"},
+    )
+
+    assert first.status_code == 201
+    assert second.status_code == 200
+    assert second.json()["result"] == "existing"
+    assert calls == []
 
 
 def test_delete_task_removes_record_and_files(tmp_path):
@@ -286,3 +313,35 @@ def test_task_summarize_endpoint_returns_file_content(tmp_path):
     assert response.status_code == 200
     assert response.json()["content"].startswith("# 总结")
     assert response.json()["path"] == str(summarize_path)
+
+
+def test_task_summarize_endpoint_returns_english_content_when_requested(tmp_path):
+    client = TestClient(create_app(db_path=tmp_path / "app.db", executor=NoopExecutor()))
+    payload = {
+        "podcast_title": "大内密谈",
+        "rss_url": "http://example.com/feed.xml",
+        "episode_title": "vol.1385 从小龙虾跑路到Codex",
+        "audio_url": "http://example.com/audio.mp3",
+    }
+    task = client.post("/api/tasks", json=payload).json()["task"]
+
+    zh_path = tmp_path / "summaries" / "vol1385-summarize.md"
+    en_path = tmp_path / "summaries" / "vol1385-summarize.en.md"
+    zh_path.parent.mkdir(parents=True, exist_ok=True)
+    zh_path.write_text("# 总结\n\n- 要点一\n", encoding="utf-8")
+    en_path.write_text("# Summary\n\n- Key point\n", encoding="utf-8")
+
+    update_task(
+        task["id"],
+        {
+            "summarize": str(zh_path),
+            "summarize_en": str(en_path),
+        },
+        tmp_path / "app.db",
+    )
+
+    response = client.get(f"/api/tasks/{task['id']}/summarize", params={"lang": "en"})
+
+    assert response.status_code == 200
+    assert response.json()["content"].startswith("# Summary")
+    assert response.json()["path"] == str(en_path)

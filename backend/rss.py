@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 import feedparser
@@ -11,6 +12,9 @@ RSS_REQUEST_HEADERS = {
     "Accept": "application/rss+xml, application/xml, text/xml;q=0.9, */*;q=0.8",
     "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
 }
+
+EPISODE_CACHE_TTL_SECONDS = 6 * 60 * 60
+_EPISODE_CACHE: dict[str, tuple[float, list[dict[str, Any]]]] = {}
 
 
 def _extract_audio_url(entry: dict[str, Any]) -> str:
@@ -50,7 +54,7 @@ def normalize_episodes(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "guid": entry.get("id") or entry.get("guid"),
                 "audio_url": audio_url,
                 "published": entry.get("published", ""),
-                "summary": _extract_shownotes(entry),
+                "shownotes": _extract_shownotes(entry),
             }
         )
     return episodes
@@ -63,18 +67,34 @@ def filter_episodes(episodes: list[dict[str, Any]], keyword: str) -> list[dict[s
 
     matched = []
     for episode in episodes:
-        haystacks = [
-            episode.get("title", "").lower(),
-            episode.get("summary", "").lower(),
-        ]
-        if any(needle in haystack for haystack in haystacks):
+        if needle in episode.get("title", "").lower():
             matched.append(episode)
     return matched
 
 
-def fetch_episodes(rss_url: str, keyword: str = "") -> list[dict[str, Any]]:
-    if not rss_url.strip():
-        return []
+def clear_episode_cache() -> None:
+    _EPISODE_CACHE.clear()
+
+
+def _copy_episodes(episodes: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [dict(episode) for episode in episodes]
+
+
+def _cached_episodes(rss_url: str) -> list[dict[str, Any]] | None:
+    cached = _EPISODE_CACHE.get(rss_url)
+    if cached is None:
+        return None
+    cached_at, episodes = cached
+    if time.monotonic() - cached_at > EPISODE_CACHE_TTL_SECONDS:
+        _EPISODE_CACHE.pop(rss_url, None)
+        return None
+    return _copy_episodes(episodes)
+
+
+def _fetch_all_episodes(rss_url: str) -> list[dict[str, Any]]:
+    cached = _cached_episodes(rss_url)
+    if cached is not None:
+        return cached
 
     try:
         with httpx.Client(
@@ -89,4 +109,12 @@ def fetch_episodes(rss_url: str, keyword: str = "") -> list[dict[str, Any]]:
 
     parsed = feedparser.parse(response.text)
     episodes = normalize_episodes(parsed.entries)
+    _EPISODE_CACHE[rss_url] = (time.monotonic(), _copy_episodes(episodes))
+    return episodes
+
+
+def fetch_episodes(rss_url: str, keyword: str = "") -> list[dict[str, Any]]:
+    if not rss_url.strip():
+        return []
+    episodes = _fetch_all_episodes(rss_url)
     return filter_episodes(episodes, keyword)

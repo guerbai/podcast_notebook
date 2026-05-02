@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 142 142" fill="none" color="#235f62" role="img" aria-labelledby="logo-title logo-desc">
+  <title id="logo-title">Podcast Notebook</title>
+  <desc id="logo-desc">A document mark with a podcast arc, dot, and three note lines.</desc>
+  <rect x="37" y="18" width="70" height="104" rx="12" stroke="currentColor" stroke-width="7"/>
+  <path d="M51 48c0-9 7-16 16-16s16 7 16 16" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+  <circle cx="67" cy="50" r="5.5" fill="currentColor"/>
+  <path d="M51 73H91M51 90H86M51 107H77" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+</svg>
