@@ -345,3 +345,76 @@ def test_task_summarize_endpoint_returns_english_content_when_requested(tmp_path
     assert response.status_code == 200
     assert response.json()["content"].startswith("# Summary")
     assert response.json()["path"] == str(en_path)
+
+
+def test_generate_summarize_endpoint_returns_503_without_api_key(tmp_path, monkeypatch):
+    monkeypatch.delenv("PODCAST_NOTEBOOK_LLM_API_KEY", raising=False)
+    client = TestClient(create_app(db_path=tmp_path / "app.db", executor=NoopExecutor()))
+    payload = {
+        "podcast_title": "大内密谈",
+        "rss_url": "http://example.com/feed.xml",
+        "episode_title": "vol.1385 从小龙虾跑路到Codex",
+        "audio_url": "http://example.com/audio.mp3",
+    }
+    task = client.post("/api/tasks", json=payload).json()["task"]
+    transcript_path = tmp_path / "transcripts" / "episode.txt"
+    transcript_path.parent.mkdir(parents=True, exist_ok=True)
+    transcript_path.write_text("完整转写内容", encoding="utf-8")
+    update_task(
+        task["id"],
+        {
+            "status": "completed",
+            "progress_stage": "completed",
+            "output_txt_path": str(transcript_path),
+        },
+        tmp_path / "app.db",
+    )
+
+    response = client.post(f"/api/tasks/{task['id']}/summarize", json={"lang": "zh-CN"})
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "Summarize API key is not configured"
+
+
+def test_generate_summarize_endpoint_updates_task_with_model_output(tmp_path, monkeypatch):
+    import backend.summarizer as summarizer_module
+
+    class FakeClient:
+        def __init__(self, config):
+            self.config = config
+
+        def generate(self, prompt: str, language: str) -> str:
+            assert "完整转写内容" in prompt
+            assert language == "zh-CN"
+            return "# 总结\n\n- API 生成的要点\n"
+
+    monkeypatch.setenv("PODCAST_NOTEBOOK_LLM_API_KEY", "test-key")
+    monkeypatch.setattr(summarizer_module, "SUMMARIES_DIR", tmp_path / "summaries")
+    monkeypatch.setattr(summarizer_module, "OpenAICompatibleSummaryClient", FakeClient)
+    client = TestClient(create_app(db_path=tmp_path / "app.db", executor=NoopExecutor()))
+    payload = {
+        "podcast_title": "大内密谈",
+        "rss_url": "http://example.com/feed.xml",
+        "episode_title": "vol.1385 从小龙虾跑路到Codex",
+        "audio_url": "http://example.com/audio.mp3",
+    }
+    task = client.post("/api/tasks", json=payload).json()["task"]
+    transcript_path = tmp_path / "transcripts" / "episode.txt"
+    transcript_path.parent.mkdir(parents=True, exist_ok=True)
+    transcript_path.write_text("完整转写内容", encoding="utf-8")
+    update_task(
+        task["id"],
+        {
+            "status": "completed",
+            "progress_stage": "completed",
+            "output_txt_path": str(transcript_path),
+        },
+        tmp_path / "app.db",
+    )
+
+    response = client.post(f"/api/tasks/{task['id']}/summarize", json={"lang": "zh-CN"})
+
+    assert response.status_code == 200
+    updated = response.json()["task"]
+    assert updated["summarize"].endswith("-summarize.md")
+    assert Path(updated["summarize"]).read_text(encoding="utf-8").startswith("# 总结")

@@ -5,10 +5,19 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Response
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from backend.db import get_task, init_db, list_task_events
 from backend.podcast_search import search_podcasts
 from backend.rss import fetch_episodes
+from backend.summarizer import (
+    SummaryAlreadyExistsError,
+    SummaryNotConfiguredError,
+    SummaryProviderError,
+    SummaryTaskNotFoundError,
+    SummaryTranscriptMissingError,
+    generate_task_summarize,
+)
 from backend.tasks import (
     TaskCreate,
     enqueue_task,
@@ -23,6 +32,10 @@ from backend.tasks import (
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 FRONTEND_DIR = ROOT_DIR / "frontend"
+
+
+class SummarizeGenerateRequest(BaseModel):
+    lang: str = "zh-CN"
 
 
 def _episode_list_item(episode: dict[str, Any]) -> dict[str, Any]:
@@ -98,6 +111,22 @@ def create_app(db_path: str | Path | None = None, executor: ThreadPoolExecutor |
         if summarize is None:
             raise HTTPException(status_code=404, detail="Summarize not found")
         return summarize
+
+    @app.post("/api/tasks/{task_id}/summarize")
+    def task_generate_summarize(task_id: int, payload: SummarizeGenerateRequest) -> dict[str, Any]:
+        try:
+            task = generate_task_summarize(task_id, payload.lang, app.state.db_path)
+        except SummaryTaskNotFoundError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except SummaryAlreadyExistsError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        except SummaryTranscriptMissingError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        except SummaryNotConfiguredError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+        except SummaryProviderError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        return {"task": task, "result": "generated"}
 
     @app.post("/api/tasks", status_code=201)
     def task_create(payload: TaskCreate):
