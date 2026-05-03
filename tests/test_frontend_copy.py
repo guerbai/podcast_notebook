@@ -57,8 +57,8 @@ def test_frontend_exposes_language_toggle_and_i18n_dictionaries():
     assert 'lang=${state.language}' in script
     assert "播客笔记本" in script
     assert "Podcast Notebook" in script
-    assert "/static/app.js?v=20260502-no-chinese-periods" in html
-    assert "/static/styles.css?v=20260502-no-chinese-periods" in html
+    assert "/static/app.js?v=20260503-summarize-lock-fix" in html
+    assert "/static/styles.css?v=20260503-summarize-lock-fix" in html
 
 
 def test_frontend_chinese_copy_omits_sentence_periods():
@@ -233,6 +233,39 @@ def test_frontend_includes_split_progress_and_layout_markers():
     assert "detail.summarize" in script
     assert "/shownotes" in script
     assert "/summarize" in script
+
+
+def test_frontend_exposes_manual_summarize_generation_for_eligible_tasks():
+    script = Path("frontend/app.js").read_text(encoding="utf-8")
+
+    assert "generateSummarize" in script
+    assert "生成总结" in script
+    assert "正在生成总结…" in script
+    assert "总结已生成" in script
+    assert "Generate summary" in script
+    assert "Generating summary..." in script
+    assert "Summary generated." in script
+    assert 'data-action="generate-summarize"' in script
+    assert "const SUMMARIZE_LOCK_TTL_MS = 10 * 60 * 1000" in script
+    assert "function summarizeLockKey(taskId, language)" in script
+    assert "function isSummarizeLocked(taskId, language)" in script
+    assert "function setSummarizeLock(taskId, language)" in script
+    assert "function clearSummarizeLock(taskId, language)" in script
+    assert "localStorage.setItem(summarizeLockKey(taskId, language), String(Date.now() + SUMMARIZE_LOCK_TTL_MS))" in script
+    assert "Boolean(task.output_txt_path) && !hasLocalizedSummarize && !isSummarizeLockedForLanguage" in script
+    assert 'isSummarizeLockedForLanguage ? t("generatingSummarize")' in script
+    assert 'fetchJson(`/api/tasks/${task.id}/summarize`, {' in script
+    assert "body: JSON.stringify({ lang: state.language })" in script
+    assert "setSummarizeLock(task.id, state.language)" in script
+    assert "clearSummarizeLock(task.id, state.language)" in script
+    assert 'showToast(t("summarizeGenerated"), "success")' in script
+
+
+def test_frontend_generated_summary_takes_priority_over_local_lock():
+    script = Path("frontend/app.js").read_text(encoding="utf-8")
+
+    assert "const isSummarizeLockedForLanguage = !hasLocalizedSummarize && isSummarizeLocked(task.id, state.language)" in script
+    assert "if (hasLocalizedSummarize) {\n    clearSummarizeLock(task.id, state.language);\n  }" in script
 
 
 def test_podcast_search_results_use_stable_layout():
