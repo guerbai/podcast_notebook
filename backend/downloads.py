@@ -143,6 +143,22 @@ def download_audio(
 ) -> Path:
     path = Path(destination)
     path.parent.mkdir(parents=True, exist_ok=True)
-    if shutil.which("curl"):
-        return _download_with_curl(audio_url, path, progress_callback=progress_callback)
-    return _download_with_httpx(audio_url, path, progress_callback=progress_callback, chunk_size=chunk_size)
+    downloader = _download_with_curl if shutil.which("curl") else _download_with_httpx
+    last_error: subprocess.CalledProcessError | httpx.HTTPError | None = None
+    for candidate_url in _download_url_candidates(audio_url):
+        try:
+            if downloader is _download_with_curl:
+                return downloader(candidate_url, path, progress_callback=progress_callback)
+            return downloader(candidate_url, path, progress_callback=progress_callback, chunk_size=chunk_size)
+        except (subprocess.CalledProcessError, httpx.HTTPError) as exc:
+            last_error = exc
+    if last_error is not None:
+        raise last_error
+    raise RuntimeError("No audio URL candidates available")
+
+
+def _download_url_candidates(audio_url: str) -> list[str]:
+    parsed = urlparse(audio_url)
+    if parsed.scheme == "https" and parsed.netloc == "cdn.lizhi.fm":
+        return [audio_url, audio_url.replace("https://", "http://", 1)]
+    return [audio_url]
