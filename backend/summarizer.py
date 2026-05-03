@@ -144,6 +144,7 @@ def generate_task_summarize(
 def build_summary_prompt(task: dict, transcript: str, shownotes: str, language: str) -> str:
     output_language = "English" if language == "en" else "Simplified Chinese"
     skill_instructions = _read_summary_skill()
+    language_specific_rules = _language_specific_summary_rules(language)
     return "\n\n".join(
         [
             "Generate a reusable podcast episode summary from the transcript and shownotes.",
@@ -157,6 +158,7 @@ def build_summary_prompt(task: dict, transcript: str, shownotes: str, language: 
             "- Do not mention task ids, file paths, database updates, API verification, or completion status.",
             "- Match the density of existing agent-generated summaries: preserve the episode's main logic, examples, mechanisms, and risks.",
             "- For a substantial Chinese episode, prefer roughly 1200-2200 Chinese characters; use 2200-3000 for dense episodes.",
+            language_specific_rules,
             "Podcast task summarize skill writing instructions:",
             skill_instructions,
             f"Output language: {output_language}",
@@ -167,6 +169,21 @@ def build_summary_prompt(task: dict, transcript: str, shownotes: str, language: 
             "Transcript:",
             transcript,
         ]
+    )
+
+
+def _language_specific_summary_rules(language: str) -> str:
+    if language == "en":
+        return (
+            "English output rules:\n"
+            "- Translate section headings into natural English.\n"
+            "- Do not use Chinese section headings such as `核心判断`, `市场变量`, `资产或行业观点`, `操作启发`, or `风险提示`.\n"
+            "- For finance or investing episodes, prefer headings like: Core Thesis / Market Variables / Asset or Industry Views / Actionable Takeaways / Risk Notes."
+        )
+    return (
+        "Chinese output rules:\n"
+        "- Use Simplified Chinese for the title, section headings, and body.\n"
+        "- Prefer concise Chinese section headings chosen from the episode type."
     )
 
 

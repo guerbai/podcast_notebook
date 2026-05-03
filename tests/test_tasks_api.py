@@ -343,6 +343,7 @@ def test_task_summarize_endpoint_returns_english_content_when_requested(tmp_path
     response = client.get(f"/api/tasks/{task['id']}/summarize", params={"lang": "en"})
 
     assert response.status_code == 200
+    assert response.json()["title"] == "Summary"
     assert response.json()["content"].startswith("# Summary")
     assert response.json()["path"] == str(en_path)
 

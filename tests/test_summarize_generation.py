@@ -190,6 +190,23 @@ def test_summary_prompt_excludes_agent_operational_steps():
     assert "Do not use ###" in prompt
 
 
+def test_english_summary_prompt_requires_english_section_headings():
+    prompt = build_summary_prompt(
+        {
+            "podcast_title": "第一财经",
+            "episode_title": "提前布局能源股，巴菲特又赢麻了？|巴菲特时间01",
+        },
+        "完整转写内容",
+        "单集介绍内容",
+        "en",
+    )
+
+    assert "Output language: English" in prompt
+    assert "Translate section headings into natural English" in prompt
+    assert "Do not use Chinese section headings" in prompt
+    assert "Core Thesis / Market Variables / Asset or Industry Views / Actionable Takeaways / Risk Notes" in prompt
+
+
 def test_openai_client_system_prompt_asks_for_detailed_summary_without_operational_text(monkeypatch):
     captured = {}
 

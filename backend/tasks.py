@@ -124,11 +124,20 @@ def get_task_text_file(task_id: int, field: str, db_path: str | Path) -> dict[st
     path = Path(file_path)
     if not path.exists() or not path.is_file():
         return None
+    content = path.read_text(encoding="utf-8")
     return {
-        "title": task["episode_title"],
-        "content": path.read_text(encoding="utf-8"),
+        "title": _markdown_title(content) or task["episode_title"],
+        "content": content,
         "path": str(path),
     }
+
+
+def _markdown_title(markdown: str) -> str:
+    for line in markdown.splitlines():
+        line = line.strip()
+        if line.startswith("# "):
+            return line.removeprefix("# ").strip()
+    return ""
 
 
 def list_task_details(db_path: str | Path) -> list[dict[str, Any]]:
