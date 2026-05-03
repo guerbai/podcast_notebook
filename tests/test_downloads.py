@@ -1,3 +1,5 @@
+import subprocess
+
 from backend.downloads import build_download_record
 from backend import downloads
 
@@ -33,6 +35,32 @@ def test_download_audio_prefers_curl_when_available(monkeypatch, tmp_path):
 
     assert result == destination
     assert calls[0][0] == "curl"
+
+
+def test_download_audio_retries_lizhi_https_url_as_http(monkeypatch, tmp_path):
+    destination = tmp_path / "episode.mp3"
+    calls = []
+
+    monkeypatch.setattr(downloads.shutil, "which", lambda name: "/usr/bin/curl" if name == "curl" else None)
+
+    def fake_curl(audio_url, destination, progress_callback=None):
+        calls.append(audio_url)
+        if audio_url.startswith("https://cdn.lizhi.fm/"):
+            raise subprocess.CalledProcessError(56, ["curl", audio_url])
+        destination.write_bytes(b"ok")
+        if progress_callback:
+            progress_callback(2, 2)
+        return destination
+
+    monkeypatch.setattr(downloads, "_download_with_curl", fake_curl)
+
+    result = downloads.download_audio("https://cdn.lizhi.fm/audio/2026/04/09/example.mp3", destination)
+
+    assert result == destination
+    assert calls == [
+        "https://cdn.lizhi.fm/audio/2026/04/09/example.mp3",
+        "http://cdn.lizhi.fm/audio/2026/04/09/example.mp3",
+    ]
 
 
 def test_download_with_curl_sets_browser_like_user_agent(monkeypatch, tmp_path):
