@@ -1,81 +1,237 @@
 # Podcast Notebook
 
-Local web app for searching podcasts, choosing a specific episode, downloading the audio, and generating a full transcript `.txt` file with tracked task progress.
+<p align="center">
+  <img src="frontend/assets/logo.svg" width="96" alt="Podcast Notebook logo" />
+</p>
 
-## What it does
+Podcast Notebook is a local-first web app for turning podcast episodes into local transcripts, shownotes, and reusable summaries.
 
-- search podcasts by podcast name
-- search one podcast's episodes by keyword
-- create a transcription task for one selected episode
-- track download and transcription progress in the browser
-- persist task history in SQLite
-- attach optional Markdown summaries to tasks
-- keep shownotes and manually generated summarize notes as local files linked from SQLite
+[中文版](README.zh-CN.md)
 
-## Runtime
+## Screenshots
 
-This project keeps its runtime local to the repo:
+![Podcast Notebook desktop view](docs/assets/podcast-notebook-en.png)
 
-- Python virtual environment: `.venv/`
-- database: `data/db/`
-- downloaded audio: `data/downloads/`
-- transcripts: `data/transcripts/`
-- cleaned episode shownotes: `data/shownotes/`
-- summaries and summarize files: `data/summaries/`
-- downloaded models: `data/models/`
-- optional local ffmpeg binary: `tools/ffmpeg`
+## Why this exists
 
-## Bootstrap
+Podcast Notebook is built around common pain points for podcast listeners:
 
-Requires Python 3.10+.
+- You follow more podcasts than you can realistically listen to, and shownotes are often too thin to decide whether an episode is worth your time.
+- Some episodes are dense enough to deserve notes, but manually listening, pausing, rewinding, and writing takes too long.
+
+The app turns an episode into a searchable local transcript, cleaned shownotes, and a reusable summary so you can filter, prioritize, revisit, and write notes more efficiently.
+
+It gives you a small local workspace for podcast research:
+
+- find a podcast through Apple Podcasts / iTunes search
+- choose a specific RSS episode
+- download the episode audio locally
+- transcribe it with `faster-whisper`
+- keep task history, progress, events, and file paths in SQLite
+- attach cleaned shownotes and generated Markdown summaries to the same task
+- optionally generate Chinese or English summaries with an OpenAI-compatible LLM endpoint
+
+It is designed for personal archives and research workflows, not as a hosted multi-user service.
+
+## Workflow
+
+```text
+Search podcast -> Select episode -> Create task
+      -> Download audio -> Transcribe locally -> Review transcript
+      -> Generate summary -> Keep files linked to the task
+```
+
+The browser UI is organized around the same flow: podcast search, episode selection, and a task archive with download/transcription progress.
+
+## Features
+
+- Podcast search through the public iTunes Search API.
+- RSS episode lookup with a six-hour in-memory cache.
+- Audio download with progress tracking.
+- Local CPU transcription through `faster-whisper`.
+- Separate download and transcription progress.
+- SQLite-backed task history and event logs.
+- Duplicate protection by `podcast title + episode title`.
+- Task delete and restart with cooperative cancellation.
+- Local file archive for audio, transcripts, shownotes, and summaries.
+- Chinese / English UI toggle.
+- Optional Markdown summary generation through either an OpenAI-compatible API key or the project agent skill.
+
+## Requirements
+
+- Python 3.10+
+- macOS or Linux
+- Network access for podcast search, RSS fetching, audio downloads, model downloads, and optional LLM summary generation
+- Enough disk space for downloaded audio, transcripts, and Whisper model files
+
+The bootstrap script creates the project virtual environment and local runtime directories. On macOS, it also attempts to download a project-local `tools/ffmpeg` binary when `curl` and `unzip` are available.
+
+## Quick start
 
 ```bash
 bash scripts/bootstrap_runtime.sh
 ```
 
-If your default `python3` is older, point bootstrap at a newer interpreter explicitly:
+If your default `python3` is older than 3.10, point the bootstrap script at a newer interpreter:
 
 ```bash
 PYTHON_BIN=/opt/homebrew/bin/python3.12 bash scripts/bootstrap_runtime.sh
 ```
 
-## Run tests
-
-```bash
-.venv/bin/pytest -v
-```
-
-## Run the app
-
-Local-only:
+Run the app locally:
 
 ```bash
 .venv/bin/uvicorn backend.app:create_app --factory --reload
 ```
 
-Then open [http://127.0.0.1:8000](http://127.0.0.1:8000).
+Open:
 
-LAN-accessible:
+```text
+http://127.0.0.1:8000
+```
+
+The first transcription may take longer because the Whisper model has to be downloaded into `data/models/`.
+
+## LAN access
+
+To open the app from another device on the same network:
 
 ```bash
 .venv/bin/uvicorn backend.app:create_app --factory --reload --host 0.0.0.0 --port 58049
 ```
 
-Then open `http://<your-lan-ip>:58049` from another device on the same network. On macOS you can find the LAN IP with:
+Find your LAN IP on macOS:
 
 ```bash
 ifconfig | grep "inet " | grep -v 127.0.0.1
 ```
 
-Example: [http://192.168.1.20:58049](http://192.168.1.20:58049).
+Then open:
 
-## Notes
+```text
+http://<your-lan-ip>:58049
+```
 
-- `faster-whisper` is used for local transcription.
-- The first model download may take a while.
-- Long podcast transcription on CPU can also take a while, so the browser task list is intended to make progress visible.
-- The same `播客名 + 单集名` only keeps one task record. Creating it again will focus the existing task instead of making a duplicate.
-- Running tasks can be deleted or restarted. The app will request a cooperative stop first, then finish deleting or rerunning.
-- The task card shows separate `下载进度` and `转写进度`, rather than one mixed percentage.
-- If a task already has a generated Markdown summary, the card will expose a `查看总结` button and open it in a large modal.
-- If a task has shownotes or summarize file paths, the card exposes `查看 Shownotes` and `查看 Summarize` buttons.
+## Summary generation
+
+Transcription is local. Summary generation is optional, and the project supports two paths.
+
+### Option 1: in-app generation with an API key
+
+The app can generate a summary through an OpenAI-compatible chat completions endpoint.
+
+Set these environment variables before starting the server:
+
+```bash
+export PODCAST_NOTEBOOK_LLM_API_KEY="..."
+export PODCAST_NOTEBOOK_LLM_BASE_URL="https://api.openai.com/v1"
+export PODCAST_NOTEBOOK_LLM_MODEL="gpt-4o-mini"
+export PODCAST_NOTEBOOK_LLM_TIMEOUT="60"
+```
+
+Only `PODCAST_NOTEBOOK_LLM_API_KEY` is required for summary generation. The other values have defaults.
+
+If the API key is not configured, the app can still search, download, transcribe, and view existing files. New summary generation will fail with a configuration error.
+
+### Option 2: agent-assisted generation with the project skill
+
+You can also generate or revise summaries through an agent that uses the bundled project skill:
+
+```text
+skills/podcast-task-summarize/SKILL.md
+```
+
+The skill workflow can:
+
+- locate the exact task in `data/db/podcast_notebook.db`
+- read the cleaned shownotes and ASR transcript
+- produce Chinese and English Markdown summaries under `data/summaries/`
+- update `tasks.summarize` and `tasks.summarize_en`
+- verify the app can read both summaries
+
+## Local data layout
+
+Runtime files stay inside the repository and are ignored by git.
+
+| Path | Purpose |
+| --- | --- |
+| `data/db/` | SQLite database |
+| `data/downloads/` | Downloaded episode audio |
+| `data/transcripts/` | Transcript `.txt` files |
+| `data/shownotes/` | Cleaned episode shownotes |
+| `data/summaries/` | Generated Markdown summaries |
+| `data/models/` | Hugging Face / faster-whisper model cache |
+| `tools/ffmpeg` | Optional project-local ffmpeg binary |
+
+## Development
+
+Install runtime dependencies:
+
+```bash
+bash scripts/bootstrap_runtime.sh
+```
+
+Run tests:
+
+```bash
+.venv/bin/pytest -v
+```
+
+Run the maintenance helper:
+
+```bash
+.venv/bin/python scripts/maintain_tasks.py
+```
+
+## Project map
+
+```text
+backend/
+  app.py             FastAPI app and HTTP routes
+  podcast_search.py  iTunes podcast search
+  rss.py             RSS fetching and episode normalization
+  downloads.py       Audio download helpers
+  transcription.py   faster-whisper transcription
+  summarizer.py      OpenAI-compatible summary generation
+  tasks.py           Task lifecycle orchestration
+  db.py              SQLite schema and persistence
+
+frontend/
+  index.html         Browser UI shell
+  app.js             UI state, API calls, rendering, i18n
+  styles.css         Application styling
+  assets/            Logo and icon assets
+
+scripts/
+  bootstrap_runtime.sh
+  maintain_tasks.py
+
+tests/
+  pytest coverage for backend behavior, API routes, frontend copy, and task flow
+```
+
+## Troubleshooting
+
+### The first transcription is slow
+
+The model is downloaded on first use and cached under `data/models/`. CPU transcription can also be slow for long episodes.
+
+### Podcast search returns no results
+
+The app uses the public iTunes Search API. Check network access and try the exact podcast title.
+
+### Episode search returns no results
+
+Some RSS feeds do not expose audio enclosures or have unusual metadata. The app only lists entries with both a title and an audio URL.
+
+### Summary generation fails
+
+Check `PODCAST_NOTEBOOK_LLM_API_KEY` and any custom `PODCAST_NOTEBOOK_LLM_BASE_URL` / model settings. Search, download, and transcription do not require these variables.
+
+### LAN access does not work
+
+Start uvicorn with `--host 0.0.0.0`, use the machine's LAN IP, and check local firewall settings.
+
+## License
+
+MIT License. See [LICENSE](LICENSE).
