@@ -1,5 +1,7 @@
+const DEFAULT_LANGUAGE = "en";
+
 const state = {
-  language: localStorage.getItem("podcast-notebook-language") || "zh-CN",
+  language: localStorage.getItem("podcast-notebook-language") || DEFAULT_LANGUAGE,
   selectedPodcast: null,
   tasksPoller: null,
   taskDetails: new Map(),
@@ -259,7 +261,7 @@ const TRANSLATIONS = {
 const SUPPORTED_LANGUAGES = new Set(Object.keys(TRANSLATIONS));
 
 function currentTranslations() {
-  return TRANSLATIONS[state.language] || TRANSLATIONS["zh-CN"];
+  return TRANSLATIONS[state.language] || TRANSLATIONS[DEFAULT_LANGUAGE];
 }
 
 function t(key, values = {}) {
@@ -268,7 +270,7 @@ function t(key, values = {}) {
   for (const part of parts) {
     value = value?.[part];
   }
-  const fallback = parts.reduce((source, part) => source?.[part], TRANSLATIONS["zh-CN"]);
+  const fallback = parts.reduce((source, part) => source?.[part], TRANSLATIONS[DEFAULT_LANGUAGE]);
   const template = typeof value === "string" ? value : fallback || key;
   return Object.entries(values).reduce(
     (message, [name, replacement]) => message.replaceAll(`{${name}}`, String(replacement)),
@@ -303,7 +305,7 @@ function applyStaticTranslations() {
 }
 
 function setLanguage(language) {
-  state.language = SUPPORTED_LANGUAGES.has(language) ? language : "zh-CN";
+  state.language = SUPPORTED_LANGUAGES.has(language) ? language : DEFAULT_LANGUAGE;
   localStorage.setItem("podcast-notebook-language", state.language);
   state.taskFiles.clear();
   applyStaticTranslations();

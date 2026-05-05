@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>播客笔记本</title>
+    <title>Podcast Notebook</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.2.1/dist/styles/webawesome.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.2.1/dist/styles/themes/default.css" />
     <link rel="icon" href="/static/assets/logo.svg" type="image/svg+xml" />
@@ -16,12 +16,12 @@
     <div class="modal-shell" data-role="confirm-modal" hidden>
       <div class="modal-backdrop" data-modal-close></div>
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-        <p class="modal-kicker" data-i18n="modalDeleteKicker">删除确认</p>
-        <h2 id="confirm-title" data-i18n="modalDeleteTitle">要删除这个任务吗？</h2>
-        <p class="modal-copy" data-i18n="modalDeleteCopy">关联的本地音频、全文稿和事件日志也会一起删除，运行中的任务会先停止，再完成清理</p>
+        <p class="modal-kicker" data-i18n="modalDeleteKicker">Delete confirmation</p>
+        <h2 id="confirm-title" data-i18n="modalDeleteTitle">Delete this task?</h2>
+        <p class="modal-copy" data-i18n="modalDeleteCopy">The linked local audio, transcript, and event log will be removed too. Running tasks will stop before cleanup finishes.</p>
         <div class="modal-actions">
-          <button type="button" class="secondary-button" data-modal-close data-i18n="keepTask">先保留</button>
-          <button type="button" class="danger-button" id="confirm-delete-task" data-i18n="confirmDelete">确认删除</button>
+          <button type="button" class="secondary-button" data-modal-close data-i18n="keepTask">Keep task</button>
+          <button type="button" class="danger-button" id="confirm-delete-task" data-i18n="confirmDelete">Delete</button>
         </div>
       </div>
     </div>
@@ -31,10 +31,10 @@
       <div class="modal-card modal-card--summary" role="dialog" aria-modal="true" aria-labelledby="summary-title">
         <div class="modal-summary__header">
           <div>
-            <p class="modal-kicker" data-i18n="summaryKicker">节目总结</p>
-            <h2 id="summary-title" data-i18n="summaryTitle">总结内容</h2>
+            <p class="modal-kicker" data-i18n="summaryKicker">Episode summary</p>
+            <h2 id="summary-title" data-i18n="summaryTitle">Summary</h2>
           </div>
-          <button type="button" class="ghost-button" data-summary-close data-i18n="close">关闭</button>
+          <button type="button" class="ghost-button" data-summary-close data-i18n="close">Close</button>
         </div>
         <div id="summary-content" class="summary-render"></div>
       </div>
@@ -46,8 +46,8 @@
           <div class="brand-lockup">
             <img class="brand-logo" src="/static/assets/logo.svg" alt="" aria-hidden="true" />
             <div class="brand-copy">
-              <h1 data-i18n="heroTitle">播客笔记本</h1>
-              <p class="lede" data-i18n="heroLede">检索、转写、总结，集中管理本地播客笔记</p>
+              <h1 data-i18n="heroTitle">Podcast Notebook</h1>
+              <p class="lede" data-i18n="heroLede">Search, transcribe, summarize, and manage local podcast notes</p>
             </div>
           </div>
         </div>
@@ -55,11 +55,11 @@
           <div class="masthead-note__top">
             <p class="note-label">Local Archive</p>
             <div class="top-controls">
-              <div class="language-control" aria-label="语言" data-i18n-aria-label="languageLabel">
-                <span data-i18n="languageLabel">语言：</span>
-                <div class="language-switch" role="group" aria-label="语言">
-                  <button type="button" class="language-option" data-language-option="zh-CN" aria-pressed="true">中文</button>
-                  <button type="button" class="language-option" data-language-option="en" aria-pressed="false">EN</button>
+              <div class="language-control" aria-label="Language:" data-i18n-aria-label="languageLabel">
+                <span data-i18n="languageLabel">Language:</span>
+                <div class="language-switch" role="group" aria-label="Language">
+                  <button type="button" class="language-option" data-language-option="en" aria-pressed="true">EN</button>
+                  <button type="button" class="language-option" data-language-option="zh-CN" aria-pressed="false">中文</button>
                 </div>
               </div>
               <a class="github-link" href="https://github.com/guerbai/podcast_notebook" target="_blank" rel="noreferrer" aria-label="GitHub repository">
@@ -69,28 +69,28 @@
           </div>
           <div class="masthead-note__body">
             <div>
-              <p class="note-title" data-i18n="noteTitle">本地任务</p>
-              <p class="note-body" data-i18n="noteBody">全文、单集介绍和总结文件会关联到同一条任务</p>
+              <p class="note-title" data-i18n="noteTitle">Local tasks</p>
+              <p class="note-body" data-i18n="noteBody">Transcripts, shownotes, and summaries stay linked to one task</p>
             </div>
           </div>
         </aside>
       </header>
 
       <div class="workspace-grid">
-        <section class="workflow-stack" aria-label="播客检索流程">
+        <section class="workflow-stack" aria-label="Podcast search workflow">
           <article class="sheet">
             <div class="section-heading">
               <p class="section-index">01</p>
               <div>
-                <h2 data-i18n="searchPodcastTitle">播客</h2>
-                <p data-i18n="searchPodcastIntro">先找到正确播客</p>
+                <h2 data-i18n="searchPodcastTitle">Podcast</h2>
+                <p data-i18n="searchPodcastIntro">Find the right show first</p>
               </div>
             </div>
             <label class="field">
-              <span data-i18n="podcastName">播客</span>
-              <input id="podcast-query" type="text" placeholder="大内密谈" data-i18n-placeholder="podcastPlaceholder" />
+              <span data-i18n="podcastName">Podcast</span>
+              <input id="podcast-query" type="text" placeholder="The Joe Rogan Experience" data-i18n-placeholder="podcastPlaceholder" />
             </label>
-            <button id="search-podcasts" type="button" class="primary-button" data-i18n="searchPodcastAction">搜索播客</button>
+            <button id="search-podcasts" type="button" class="primary-button" data-i18n="searchPodcastAction">Search podcasts</button>
             <div id="podcast-results" class="results"></div>
           </article>
 
@@ -98,20 +98,20 @@
             <div class="section-heading">
               <p class="section-index">02</p>
               <div>
-                <h2 data-i18n="chooseEpisodeTitle">单集</h2>
-                <p data-i18n="chooseEpisodeIntro">选择一集创建任务</p>
+                <h2 data-i18n="chooseEpisodeTitle">Episode</h2>
+                <p data-i18n="chooseEpisodeIntro">Choose one episode to create a task</p>
               </div>
             </div>
             <div class="episode-browser__header">
               <p id="selected-podcast" class="selected"></p>
-              <p id="episode-subhead" class="episode-subhead" data-i18n="episodeInitial">先选择播客</p>
+              <p id="episode-subhead" class="episode-subhead" data-i18n="episodeInitial">Select a podcast first</p>
             </div>
             <label class="field">
-              <span data-i18n="episodeKeyword">关键词</span>
+              <span data-i18n="episodeKeyword">Keyword</span>
               <input id="episode-query" type="text" placeholder="Codex" data-i18n-placeholder="episodePlaceholder" />
             </label>
             <div class="episode-toolbar">
-              <button id="search-episodes" type="button" class="primary-button" data-i18n="searchEpisode">筛选单集</button>
+              <button id="search-episodes" type="button" class="primary-button" data-i18n="searchEpisode">Filter episodes</button>
             </div>
             <div id="episode-results" class="results"></div>
           </article>
@@ -121,18 +121,18 @@
           <div class="section-heading section-heading-wide">
             <p class="section-index">03</p>
             <div>
-              <h2 data-i18n="archiveTitle">任务</h2>
-              <p data-i18n="archiveIntro">查看进度、文件和结果</p>
+              <h2 data-i18n="archiveTitle">Tasks</h2>
+              <p data-i18n="archiveIntro">Review progress, files, and results</p>
             </div>
           </div>
-          <div class="task-filters" aria-label="任务筛选">
-            <wa-select id="task-podcast-filter" placeholder="播客名" value="" data-i18n-placeholder="podcastFilterPlaceholder">
-              <wa-option value="" data-i18n="allPodcasts">全部播客</wa-option>
+          <div class="task-filters" aria-label="Task filters">
+            <wa-select id="task-podcast-filter" placeholder="Podcast" value="" data-i18n-placeholder="podcastFilterPlaceholder">
+              <wa-option value="" data-i18n="allPodcasts">All podcasts</wa-option>
             </wa-select>
-            <wa-select id="task-status-filter" placeholder="状态" value="" data-i18n-placeholder="statusFilterPlaceholder">
-              <wa-option value="" data-i18n="statusOptionAll">状态</wa-option>
-              <wa-option value="in_progress" data-i18n="statusInProgress">进行中</wa-option>
-              <wa-option value="completed" data-i18n="statusCompleted">已完成</wa-option>
+            <wa-select id="task-status-filter" placeholder="Status" value="" data-i18n-placeholder="statusFilterPlaceholder">
+              <wa-option value="" data-i18n="statusOptionAll">Status</wa-option>
+              <wa-option value="in_progress" data-i18n="statusInProgress">In progress</wa-option>
+              <wa-option value="completed" data-i18n="statusCompleted">Completed</wa-option>
             </wa-select>
           </div>
           <div id="task-results" class="task-results"></div>

@@ -43,7 +43,12 @@ def test_frontend_exposes_language_toggle_and_i18n_dictionaries():
     assert 'class="language-switch"' in html
     assert 'data-language-option="zh-CN"' in html
     assert 'data-language-option="en"' in html
-    assert '<span data-i18n="languageLabel">语言：</span>' in html
+    assert html.index('data-language-option="en"') < html.index('data-language-option="zh-CN"')
+    assert '<html lang="en">' in html
+    assert '<span data-i18n="languageLabel">Language:</span>' in html
+    assert 'language: localStorage.getItem("podcast-notebook-language") || DEFAULT_LANGUAGE' in script
+    assert 'const DEFAULT_LANGUAGE = "en"' in script
+    assert 'state.language = SUPPORTED_LANGUAGES.has(language) ? language : DEFAULT_LANGUAGE' in script
     assert '<wa-select id="language-toggle"' not in html
     assert '<select id="language-toggle"' not in html
     assert "const TRANSLATIONS" in script
@@ -67,7 +72,7 @@ def test_frontend_chinese_copy_omits_sentence_periods():
 
     assert "。" not in html
     assert "。" not in script
-    assert "先找到正确播客" in html
+    assert "Find the right show first" in html
     assert "先找到正确播客" in script
 
 
@@ -86,7 +91,7 @@ def test_frontend_renders_brand_logo_asset_in_masthead():
     assert 'src="/static/assets/logo.svg"' in html
     assert 'alt=""' in html
     assert '<p class="eyebrow">Podcast Notebook</p>' not in html
-    assert html.index('<h1 data-i18n="heroTitle">播客笔记本</h1>') < html.index('<p class="lede" data-i18n="heroLede"')
+    assert html.index('<h1 data-i18n="heroTitle">Podcast Notebook</h1>') < html.index('<p class="lede" data-i18n="heroLede"')
     assert ".brand-lockup" in styles
     assert ".brand-copy" in styles
     assert ".brand-logo" in styles
@@ -161,7 +166,7 @@ def test_shownotes_copy_uses_episode_intro_and_file_modal_kicker_is_distinct():
     html = Path("frontend/index.html").read_text(encoding="utf-8")
     script = Path("frontend/app.js").read_text(encoding="utf-8")
 
-    assert "单集介绍" in html
+    assert "Shownotes" in script
     assert "单集介绍" in script
     assert "原始备注" not in html
     assert "原始备注" not in script
@@ -203,9 +208,9 @@ def test_frontend_includes_split_progress_and_layout_markers():
     assert "播客" in script
     assert "taskListStatus" in script
     assert "filteredTasks" in script
-    assert "全部播客" in html
-    assert "进行中" in html
-    assert "已完成" in html
+    assert "All podcasts" in html
+    assert "In progress" in html
+    assert "Completed" in html
     assert "icon-button" in styles
     assert "task-filters" in styles
     assert "下载进度" in script
