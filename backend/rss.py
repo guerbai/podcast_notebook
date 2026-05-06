@@ -54,6 +54,7 @@ def normalize_episodes(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "guid": entry.get("id") or entry.get("guid"),
                 "audio_url": audio_url,
                 "published": entry.get("published", ""),
+                "published_parsed": entry.get("published_parsed"),
                 "shownotes": _extract_shownotes(entry),
             }
         )
@@ -91,7 +92,7 @@ def _cached_episodes(rss_url: str) -> list[dict[str, Any]] | None:
     return _copy_episodes(episodes)
 
 
-def _fetch_all_episodes(rss_url: str) -> list[dict[str, Any]]:
+def _fetch_all_episodes(rss_url: str, *, raise_on_error: bool = False) -> list[dict[str, Any]]:
     cached = _cached_episodes(rss_url)
     if cached is not None:
         return cached
@@ -105,6 +106,8 @@ def _fetch_all_episodes(rss_url: str) -> list[dict[str, Any]]:
             response = client.get(rss_url)
             response.raise_for_status()
     except httpx.HTTPError:
+        if raise_on_error:
+            raise
         return []
 
     parsed = feedparser.parse(response.text)
@@ -117,4 +120,11 @@ def fetch_episodes(rss_url: str, keyword: str = "") -> list[dict[str, Any]]:
     if not rss_url.strip():
         return []
     episodes = _fetch_all_episodes(rss_url)
+    return filter_episodes(episodes, keyword)
+
+
+def fetch_episodes_strict(rss_url: str, keyword: str = "") -> list[dict[str, Any]]:
+    if not rss_url.strip():
+        return []
+    episodes = _fetch_all_episodes(rss_url, raise_on_error=True)
     return filter_episodes(episodes, keyword)

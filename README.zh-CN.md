@@ -64,7 +64,7 @@
 - 搜索播客、读取 RSS、下载音频、下载模型和可选 LLM 总结需要网络访问
 - 需要足够磁盘空间保存音频、全文稿和 Whisper 模型文件
 
-bootstrap 脚本会创建项目虚拟环境和本地运行目录。在 macOS 上，如果系统里有 `curl` 和 `unzip`，脚本也会尝试下载项目本地的 `tools/ffmpeg`。
+bootstrap 脚本会创建项目虚拟环境和本地运行目录。
 
 ## 快速开始
 
@@ -120,16 +120,23 @@ http://<your-lan-ip>:58049
 
 应用可以通过 OpenAI-compatible chat completions 接口生成总结。
 
-启动服务前设置这些环境变量：
+推荐把模型配置写入项目私有配置文件：
 
 ```bash
-export PODCAST_NOTEBOOK_LLM_API_KEY="..."
-export PODCAST_NOTEBOOK_LLM_BASE_URL="https://api.openai.com/v1"
-export PODCAST_NOTEBOOK_LLM_MODEL="gpt-4o-mini"
-export PODCAST_NOTEBOOK_LLM_TIMEOUT="60"
+cp config/podcast_notebook.example.yaml config/podcast_notebook.yaml
 ```
 
-只有 `PODCAST_NOTEBOOK_LLM_API_KEY` 是生成总结所必需的。其他值都有默认值。
+然后编辑 `config/podcast_notebook.yaml`：
+
+```yaml
+llm:
+  api_key: "..."
+  base_url: "https://api.openai.com/v1"
+  model: "gpt-4o-mini"
+  timeout_seconds: 60
+```
+
+`config/podcast_notebook.yaml` 会被 git 忽略，适合保存本地 API key。
 
 如果没有配置 API key，应用仍然可以搜索、下载、转写和查看已有文件。只是新的总结生成会返回配置错误。
 
@@ -149,6 +156,41 @@ skills/podcast-task-summarize/SKILL.md
 - 更新 `tasks.summarize` 和 `tasks.summarize_en`
 - 验证应用能读取两份总结
 
+## 订阅巡检
+
+如果希望项目自动发现关注播客最近 3 天新发布的节目，可以在私有配置里维护完整播客名：
+
+```yaml
+subscriptions:
+  podcasts:
+    - "商业就是这样"
+    - "半拿铁 | 商业沉浮录"
+```
+
+脚本会用完整播客名搜索播客，只接受名称全匹配的结果。没有全匹配时会跳过并提示检查配置名称。
+
+该脚本会通过正在运行的本地 Web 服务创建任务，效果等同于在前端点击创建任务：任务会进入现有下载/转写流程，但脚本不会等待下载或转写完成。
+
+先启动应用：
+
+```bash
+.venv/bin/uvicorn backend.app:create_app --factory --reload
+```
+
+手动检查一次：
+
+```bash
+.venv/bin/python scripts/check_subscriptions.py
+```
+
+这个脚本也可以配到 crontab 中执行，见下面的自动化脚本说明。
+
+新内容判断口径：
+
+- RSS 条目发布时间按本机时区判断在最近 3 个自然日内（含当天）
+- 本地任务库中不存在相同 `podcast_title + episode_title`
+- 条目有标题和音频地址
+
 ## 本地数据目录
 
 运行时文件都保存在仓库内，并且会被 git 忽略。
@@ -161,7 +203,6 @@ skills/podcast-task-summarize/SKILL.md
 | `data/shownotes/` | 清理后的单集介绍 |
 | `data/summaries/` | 生成的 Markdown 总结 |
 | `data/models/` | Hugging Face / faster-whisper 模型缓存 |
-| `tools/ffmpeg` | 可选的项目本地 ffmpeg 二进制文件 |
 
 ## 开发
 
@@ -181,6 +222,18 @@ bash scripts/bootstrap_runtime.sh
 
 ```bash
 .venv/bin/python scripts/maintain_tasks.py
+```
+
+项目里有两个适合 crontab 调度的脚本：
+
+- `scripts/check_subscriptions.py` 会检查配置里的播客订阅，并通过正在运行的本地 Web 服务为新单集创建任务。
+- `scripts/maintain_tasks.py` 会通过正在运行的本地 Web 服务重启超时任务，效果等同于在前端点击重试；脚本不会等待下载或转写完成。它还会删除总结生成超过 24 小时的任务音频。
+
+可以配到 crontab 中执行。把 `<schedule>` 替换成你需要的执行时间：
+
+```cron
+<schedule> cd /path/to/podcast_notebook && .venv/bin/python scripts/check_subscriptions.py >> /tmp/podcast_notebook_logs/check_subscriptions.log 2>&1
+<schedule> cd /path/to/podcast_notebook && .venv/bin/python scripts/maintain_tasks.py >> /tmp/podcast_notebook_logs/maintain_tasks.log 2>&1
 ```
 
 ## 项目结构
@@ -204,6 +257,7 @@ frontend/
 
 scripts/
   bootstrap_runtime.sh
+  check_subscriptions.py
   maintain_tasks.py
 
 tests/
@@ -226,7 +280,7 @@ tests/
 
 ### 总结生成失败
 
-检查 `PODCAST_NOTEBOOK_LLM_API_KEY`，以及自定义的 `PODCAST_NOTEBOOK_LLM_BASE_URL` / model 设置。搜索、下载和转写不依赖这些变量。
+检查 `config/podcast_notebook.yaml` 里的 `llm` 配置。搜索、下载和转写不依赖总结配置。
 
 ### 局域网访问失败
 

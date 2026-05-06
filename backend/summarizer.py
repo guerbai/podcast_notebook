@@ -8,7 +8,7 @@ from typing import Protocol
 
 import httpx
 
-from backend.config import ROOT_DIR, SUMMARIES_DIR
+from backend.config import ROOT_DIR, SUMMARIES_DIR, load_project_config
 from backend.db import add_task_event, get_task, update_task
 from backend.transcription import sanitize_filename
 
@@ -92,6 +92,15 @@ class OpenAICompatibleSummaryClient:
 
 
 def summary_config_from_env() -> SummaryConfig:
+    project_config = load_project_config()
+    if project_config.llm.api_key:
+        return SummaryConfig(
+            api_key=project_config.llm.api_key,
+            base_url=project_config.llm.base_url,
+            model=project_config.llm.model,
+            timeout_seconds=project_config.llm.timeout_seconds,
+        )
+
     api_key = os.environ.get("PODCAST_NOTEBOOK_LLM_API_KEY", "").strip()
     if not api_key:
         raise SummaryNotConfiguredError("Summarize API key is not configured")

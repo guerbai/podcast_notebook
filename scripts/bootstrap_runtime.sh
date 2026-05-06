@@ -27,14 +27,6 @@ fi
 mkdir -p "$PYTHONPYCACHEPREFIX"
 .venv/bin/pip install --no-compile -r requirements.txt
 
-mkdir -p data/db data/downloads data/transcripts data/models data/shownotes tools
-
-if [[ ! -x tools/ffmpeg ]] && [[ "$(uname -s)" == "Darwin" ]] && command -v curl >/dev/null 2>&1 && command -v unzip >/dev/null 2>&1; then
-  TMP_ZIP="$(mktemp /tmp/podcast-ffmpeg.XXXXXX.zip)"
-  curl -L "https://evermeet.cx/ffmpeg/getrelease/zip" -o "$TMP_ZIP"
-  unzip -o "$TMP_ZIP" -d tools >/dev/null
-  xattr -d com.apple.quarantine tools/ffmpeg >/dev/null 2>&1 || true
-  rm -f "$TMP_ZIP"
-fi
+mkdir -p data/db data/downloads data/transcripts data/models data/shownotes
 
 echo "Runtime ready. Activate with: source .venv/bin/activate"
