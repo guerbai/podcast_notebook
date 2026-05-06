@@ -64,7 +64,7 @@ The browser UI is organized around the same flow: podcast search, episode select
 - Network access for podcast search, RSS fetching, audio downloads, model downloads, and optional LLM summary generation
 - Enough disk space for downloaded audio, transcripts, and Whisper model files
 
-The bootstrap script creates the project virtual environment and local runtime directories. On macOS, it also attempts to download a project-local `tools/ffmpeg` binary when `curl` and `unzip` are available.
+The bootstrap script creates the project virtual environment and local runtime directories.
 
 ## Quick start
 
@@ -120,16 +120,23 @@ Transcription is local. Summary generation is optional, and the project supports
 
 The app can generate a summary through an OpenAI-compatible chat completions endpoint.
 
-Set these environment variables before starting the server:
+The recommended path is to store model settings in the private project config:
 
 ```bash
-export PODCAST_NOTEBOOK_LLM_API_KEY="..."
-export PODCAST_NOTEBOOK_LLM_BASE_URL="https://api.openai.com/v1"
-export PODCAST_NOTEBOOK_LLM_MODEL="gpt-4o-mini"
-export PODCAST_NOTEBOOK_LLM_TIMEOUT="60"
+cp config/podcast_notebook.example.yaml config/podcast_notebook.yaml
 ```
 
-Only `PODCAST_NOTEBOOK_LLM_API_KEY` is required for summary generation. The other values have defaults.
+Then edit `config/podcast_notebook.yaml`:
+
+```yaml
+llm:
+  api_key: "..."
+  base_url: "https://api.openai.com/v1"
+  model: "gpt-4o-mini"
+  timeout_seconds: 60
+```
+
+`config/podcast_notebook.yaml` is ignored by git, so it is suitable for local API keys.
 
 If the API key is not configured, the app can still search, download, transcribe, and view existing files. New summary generation will fail with a configuration error.
 
@@ -149,6 +156,41 @@ The skill workflow can:
 - update `tasks.summarize` and `tasks.summarize_en`
 - verify the app can read both summaries
 
+## Subscription checks
+
+To automatically discover episodes published in the last 3 days from podcasts you follow, maintain full podcast names in the private config:
+
+```yaml
+subscriptions:
+  podcasts:
+    - "The Daily"
+    - "Acquired"
+```
+
+The checker searches each full podcast name and only accepts exact title matches. If no exact match is found, it skips that podcast and asks you to check the configured name.
+
+The script creates tasks through the running local web app, so it behaves like clicking the create-task button in the frontend. The task enters the existing download/transcription flow, but the script does not wait for that work to finish.
+
+Start the app first:
+
+```bash
+.venv/bin/uvicorn backend.app:create_app --factory --reload
+```
+
+Run one check manually:
+
+```bash
+.venv/bin/python scripts/check_subscriptions.py
+```
+
+The script can also be scheduled with crontab; see the automation scripts section below.
+
+An episode is considered new when:
+
+- its RSS publish date is within the last 3 local calendar days, including today
+- no existing task has the same `podcast_title + episode_title`
+- it has both a title and an audio URL
+
 ## Local data layout
 
 Runtime files stay inside the repository and are ignored by git.
@@ -161,7 +203,6 @@ Runtime files stay inside the repository and are ignored by git.
 | `data/shownotes/` | Cleaned episode shownotes |
 | `data/summaries/` | Generated Markdown summaries |
 | `data/models/` | Hugging Face / faster-whisper model cache |
-| `tools/ffmpeg` | Optional project-local ffmpeg binary |
 
 ## Development
 
@@ -181,6 +222,18 @@ Run the maintenance helper:
 
 ```bash
 .venv/bin/python scripts/maintain_tasks.py
+```
+
+The project includes two cron-friendly scripts:
+
+- `scripts/check_subscriptions.py` checks configured podcast subscriptions and creates tasks for new episodes through the running local web app.
+- `scripts/maintain_tasks.py` restarts stale tasks through the running local web app, so it behaves like clicking retry in the frontend; it does not wait for download or transcription to finish. It also deletes task audio after the generated summary has existed for more than 24 hours.
+
+They can be scheduled with crontab. Replace `<schedule>` with the timing you want:
+
+```cron
+<schedule> cd /path/to/podcast_notebook && .venv/bin/python scripts/check_subscriptions.py >> /tmp/podcast_notebook_logs/check_subscriptions.log 2>&1
+<schedule> cd /path/to/podcast_notebook && .venv/bin/python scripts/maintain_tasks.py >> /tmp/podcast_notebook_logs/maintain_tasks.log 2>&1
 ```
 
 ## Project map
@@ -204,6 +257,7 @@ frontend/
 
 scripts/
   bootstrap_runtime.sh
+  check_subscriptions.py
   maintain_tasks.py
 
 tests/
@@ -226,7 +280,7 @@ Some RSS feeds do not expose audio enclosures or have unusual metadata. The app 
 
 ### Summary generation fails
 
-Check `PODCAST_NOTEBOOK_LLM_API_KEY` and any custom `PODCAST_NOTEBOOK_LLM_BASE_URL` / model settings. Search, download, and transcription do not require these variables.
+Check the `llm` section in `config/podcast_notebook.yaml`. Search, download, and transcription do not require summary settings.
 
 ### LAN access does not work
 

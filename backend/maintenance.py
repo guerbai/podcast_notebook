@@ -4,11 +4,14 @@ from concurrent.futures import Executor, ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from backend.config import DB_PATH
 from backend.db import add_task_event, init_db, list_tasks, update_task
 from backend.tasks import restart_task
+
+
+RestartTask = Callable[[int], dict[str, Any] | None]
 
 
 @dataclass(slots=True)
@@ -25,13 +28,16 @@ def maintain_tasks(
     restart_after: timedelta = timedelta(hours=1),
     audio_retention_after_summary: timedelta = timedelta(hours=24),
     executor: Executor | None = None,
+    restart_task_func: RestartTask | None = None,
     max_workers: int = 2,
 ) -> MaintenanceResult:
     current_time = _as_utc(now or datetime.now(timezone.utc))
     init_db(db_path)
 
-    owned_executor = executor is None
-    task_executor = executor or ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="podcast-maintenance")
+    owned_executor = restart_task_func is None and executor is None
+    task_executor = None
+    if restart_task_func is None:
+        task_executor = executor or ThreadPoolExecutor(max_workers=max_workers, thread_name_prefix="podcast-maintenance")
     restarted_task_ids: list[int] = []
     replacement_task_ids: list[int] = []
     deleted_audio_paths: list[str] = []
@@ -40,7 +46,10 @@ def maintain_tasks(
         for task in list_tasks(db_path):
             if not _should_restart(task, current_time, restart_after):
                 continue
-            result = restart_task(task["id"], db_path, task_executor)
+            if restart_task_func is not None:
+                result = restart_task_func(task["id"])
+            else:
+                result = restart_task(task["id"], db_path, task_executor)
             if result is None:
                 continue
             restarted_task_ids.append(task["id"])
@@ -51,7 +60,7 @@ def maintain_tasks(
             if deleted_path:
                 deleted_audio_paths.append(deleted_path)
     finally:
-        if owned_executor:
+        if owned_executor and task_executor is not None:
             task_executor.shutdown(wait=True)
 
     return MaintenanceResult(

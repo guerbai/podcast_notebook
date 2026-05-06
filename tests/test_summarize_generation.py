@@ -229,3 +229,29 @@ def test_openai_client_system_prompt_asks_for_detailed_summary_without_operation
     assert "detailed" in system_prompt
     assert "never include operational notes" in system_prompt
     assert "concise" not in system_prompt
+
+
+def test_summary_config_prefers_yaml_config_over_env(tmp_path, monkeypatch):
+    from backend.summarizer import summary_config_from_env
+
+    config_path = tmp_path / "podcast_notebook.yaml"
+    config_path.write_text(
+        """
+llm:
+  api_key: yaml-key
+  base_url: https://yaml.example.com/v1
+  model: yaml-model
+  timeout_seconds: 9
+""".strip(),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("PODCAST_NOTEBOOK_LLM_API_KEY", "env-key")
+    monkeypatch.setenv("PODCAST_NOTEBOOK_LLM_BASE_URL", "https://env.example.com/v1")
+    monkeypatch.setenv("PODCAST_NOTEBOOK_CONFIG", str(config_path))
+
+    config = summary_config_from_env()
+
+    assert config.api_key == "yaml-key"
+    assert config.base_url == "https://yaml.example.com/v1"
+    assert config.model == "yaml-model"
+    assert config.timeout_seconds == 9

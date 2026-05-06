@@ -350,6 +350,7 @@ def test_task_summarize_endpoint_returns_english_content_when_requested(tmp_path
 
 def test_generate_summarize_endpoint_returns_503_without_api_key(tmp_path, monkeypatch):
     monkeypatch.delenv("PODCAST_NOTEBOOK_LLM_API_KEY", raising=False)
+    monkeypatch.setenv("PODCAST_NOTEBOOK_CONFIG", str(tmp_path / "missing-config.yaml"))
     client = TestClient(create_app(db_path=tmp_path / "app.db", executor=NoopExecutor()))
     payload = {
         "podcast_title": "大内密谈",
