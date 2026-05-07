@@ -204,7 +204,7 @@ def test_english_summary_prompt_requires_english_section_headings():
     assert "Output language: English" in prompt
     assert "Translate section headings into natural English" in prompt
     assert "Do not use Chinese section headings" in prompt
-    assert "Core Thesis / Market Variables / Asset or Industry Views / Actionable Takeaways / Risk Notes" in prompt
+    assert "Core Thesis / Market Variables / Asset or Industry Views / Actionable Takeaways / Conclusion and Implications" in prompt
 
 
 def test_openai_client_system_prompt_asks_for_detailed_summary_without_operational_text(monkeypatch):

@@ -165,7 +165,7 @@ def build_summary_prompt(task: dict, transcript: str, shownotes: str, language: 
             "- Use only two heading levels: `#` for the episode title and `##` for top-level sections.",
             "- Do not use ### or deeper Markdown headings. If a section needs subdivisions, use bold lead labels inside normal paragraphs or bullets.",
             "- Do not mention task ids, file paths, database updates, API verification, or completion status.",
-            "- Match the density of existing agent-generated summaries: preserve the episode's main logic, examples, mechanisms, and risks.",
+            "- Match the density of existing agent-generated summaries: preserve the episode's main logic, examples, mechanisms, risks, limitations, and implications.",
             "- For a substantial Chinese episode, prefer roughly 1200-2200 Chinese characters; use 2200-3000 for dense episodes.",
             language_specific_rules,
             "Podcast task summarize skill writing instructions:",
@@ -186,8 +186,8 @@ def _language_specific_summary_rules(language: str) -> str:
         return (
             "English output rules:\n"
             "- Translate section headings into natural English.\n"
-            "- Do not use Chinese section headings such as `核心判断`, `市场变量`, `资产或行业观点`, `操作启发`, or `风险提示`.\n"
-            "- For finance or investing episodes, prefer headings like: Core Thesis / Market Variables / Asset or Industry Views / Actionable Takeaways / Risk Notes."
+            "- Do not use Chinese section headings such as `核心判断`, `市场变量`, `资产或行业观点`, `操作启发`, or `结论与启发`.\n"
+            "- For finance or investing episodes, prefer headings like: Core Thesis / Market Variables / Asset or Industry Views / Actionable Takeaways / Conclusion and Implications."
         )
     return (
         "Chinese output rules:\n"
