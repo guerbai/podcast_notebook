@@ -160,7 +160,7 @@ def test_existing_task_with_shownotes_does_not_refetch_shownotes(tmp_path, monke
     assert calls == []
 
 
-def test_delete_task_removes_record_and_files(tmp_path):
+def test_delete_task_archives_record_and_removes_source_files(tmp_path):
     client = TestClient(create_app(db_path=tmp_path / "app.db", executor=NoopExecutor()))
     payload = {
         "podcast_title": "大内密谈",
@@ -172,21 +172,25 @@ def test_delete_task_removes_record_and_files(tmp_path):
 
     audio_path = tmp_path / "downloads" / "episode.mp3"
     transcript_path = tmp_path / "transcripts" / "episode.txt"
+    shownotes_path = tmp_path / "shownotes" / "episode.txt"
     summarize_path = tmp_path / "summaries" / "episode-summarize.md"
     audio_path.parent.mkdir(parents=True, exist_ok=True)
     transcript_path.parent.mkdir(parents=True, exist_ok=True)
+    shownotes_path.parent.mkdir(parents=True, exist_ok=True)
     summarize_path.parent.mkdir(parents=True, exist_ok=True)
     audio_path.write_bytes(b"audio")
     transcript_path.write_text("transcript", encoding="utf-8")
+    shownotes_path.write_text("shownotes", encoding="utf-8")
     summarize_path.write_text("# summarize", encoding="utf-8")
 
     update_task(
         task["id"],
         {
-            "status": "failed",
-            "progress_stage": "failed",
+            "status": "completed",
+            "progress_stage": "completed",
             "audio_file_path": str(audio_path),
             "output_txt_path": str(transcript_path),
+            "shownotes": str(shownotes_path),
             "summarize": str(summarize_path),
         },
         tmp_path / "app.db",
@@ -195,14 +199,24 @@ def test_delete_task_removes_record_and_files(tmp_path):
 
     response = client.delete(f"/api/tasks/{task['id']}")
 
-    assert response.status_code == 204
-    assert client.get(f"/api/tasks/{task['id']}").status_code == 404
+    assert response.status_code == 200
+    body = response.json()
+    assert body["result"] == "archived"
+    assert body["task"]["id"] == task["id"]
+    assert body["task"]["status"] == "archived"
+    assert body["task"]["progress_stage"] == "archived"
+    assert body["task"]["audio_file_path"] is None
+    assert body["task"]["output_txt_path"] is None
+    assert body["task"]["shownotes"] == ""
+    assert body["task"]["summarize"] == str(summarize_path)
+    assert client.get(f"/api/tasks/{task['id']}").status_code == 200
     assert not audio_path.exists()
     assert not transcript_path.exists()
-    assert not summarize_path.exists()
+    assert not shownotes_path.exists()
+    assert summarize_path.exists()
 
 
-def test_delete_running_task_removes_record_immediately(tmp_path):
+def test_delete_running_task_requests_archive_after_cancellation(tmp_path):
     client = TestClient(create_app(db_path=tmp_path / "app.db", executor=NoopExecutor()))
     payload = {
         "podcast_title": "大内密谈",
@@ -222,8 +236,14 @@ def test_delete_running_task_removes_record_immediately(tmp_path):
 
     response = client.delete(f"/api/tasks/{task['id']}")
 
-    assert response.status_code == 204
-    assert client.get(f"/api/tasks/{task['id']}").status_code == 404
+    assert response.status_code == 200
+    body = response.json()
+    assert body["result"] == "archive_requested"
+    assert body["task"]["id"] == task["id"]
+    assert body["task"]["status"] == "cancelling"
+    archived = get_task(task["id"], tmp_path / "app.db")
+    assert archived["cancel_requested"] == 1
+    assert archived["pending_action"] == "archive"
 
 
 def test_restart_running_task_recreates_task_immediately(tmp_path, monkeypatch):

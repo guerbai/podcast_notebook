@@ -71,6 +71,8 @@ def maintain_tasks(
 
 
 def _should_restart(task: dict[str, Any], now: datetime, restart_after: timedelta) -> bool:
+    if task.get("status") == "archived":
+        return False
     started_at = _parse_datetime(task.get("started_at"))
     if started_at is None or now - started_at <= restart_after:
         return False

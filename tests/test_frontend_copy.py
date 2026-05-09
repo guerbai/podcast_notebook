@@ -143,8 +143,10 @@ def test_frontend_localizes_task_action_toasts():
 
     assert "createdTask" in script
     assert "taskRestarted" in script
+    assert "taskArchived" in script
     assert 'result.result === "existing" ? t("existingTask") : t("createdTask")' in script
     assert 'showToast(t("taskRestarted"), "success")' in script
+    assert 'showToast(t("taskArchived"), "success")' in script
     assert 'showToast(result.message, "success")' not in script
 
 
@@ -211,6 +213,9 @@ def test_frontend_includes_split_progress_and_layout_markers():
     assert "All podcasts" in html
     assert "In progress" in html
     assert "Completed" in html
+    assert "Archived" in script
+    assert "已归档" in script
+    assert 'value="archived"' in html
     assert "icon-button" in styles
     assert "task-filters" in styles
     assert "下载进度" in script
@@ -238,6 +243,41 @@ def test_frontend_includes_split_progress_and_layout_markers():
     assert "detail.summarize" in script
     assert "/shownotes" in script
     assert "/summarize" in script
+
+
+def test_frontend_replaces_delete_action_with_archive():
+    script = Path("frontend/app.js").read_text(encoding="utf-8")
+
+    assert "archiveTask" in script
+    assert "openArchiveModal" in script
+    assert 'data-action="archive"' in script
+    assert 'data-action="delete"' not in script
+    assert 'title="${escapeAttribute(t("archive"))}"' in script
+    assert '>↻</button>' in script
+    assert ">×</button>" in script
+    assert 'class="icon-button icon-button--danger" data-action="archive"' in script
+    assert "wa-icon" not in script
+    assert "⇩" not in script
+    assert 'task.status === "archived"' in script
+    assert "Delete this task?" not in script
+    assert "删除这个任务" not in script
+
+
+def test_frontend_only_shows_archived_tasks_when_archived_filter_is_selected():
+    script = Path("frontend/app.js").read_text(encoding="utf-8")
+
+    assert "function taskMatchesStatusFilter(task)" in script
+    assert "return listStatus !== \"archived\";" in script
+    assert "return listStatus === state.taskFilters.status;" in script
+    assert "syncTaskPodcastFilter(tasksMatchingStatusFilter())" in script
+
+
+def test_archived_status_uses_visible_badge_styling():
+    styles = Path("frontend/styles.css").read_text(encoding="utf-8")
+
+    assert ".status-archived" in styles
+    assert "background: rgba(85, 88, 79, 0.14);" in styles
+    assert "border-color: rgba(85, 88, 79, 0.24);" in styles
 
 
 def test_frontend_exposes_manual_summarize_generation_for_eligible_tasks():

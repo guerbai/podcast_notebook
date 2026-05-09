@@ -158,12 +158,28 @@ def remove_task(task_id: int, db_path: str | Path) -> dict[str, Any] | None:
     if task is None:
         return None
 
-    _cleanup_task_files(task)
-    delete_task(task_id, db_path)
+    if _is_running_task(task):
+        task = update_task(
+            task_id,
+            {
+                "status": "cancelling",
+                "cancel_requested": 1,
+                "pending_action": "archive",
+            },
+            db_path,
+        )
+        add_task_event(task_id, "Task archive requested", db_path=db_path)
+        return {
+            "task": task,
+            "result": "archive_requested",
+            "message": "任务会停止并归档。",
+        }
+
+    task = _archive_task(task, db_path)
     return {
         "task": task,
-        "result": "deleted",
-        "message": "任务已删除。",
+        "result": "archived",
+        "message": "任务已归档。",
     }
 
 
@@ -265,6 +281,11 @@ def _fetch_shownotes(payload: dict[str, Any]) -> str:
 def run_task(task_id: int, db_path: str | Path, executor: Executor | None = None) -> None:
     task = get_task(task_id, db_path)
     if task is None:
+        return
+    if task.get("status") == "archived":
+        return
+    if task.get("cancel_requested"):
+        _handle_cancellation(task_id, db_path, executor)
         return
 
     try:
@@ -402,15 +423,47 @@ def _raise_if_cancel_requested(task_id: int, db_path: str | Path) -> None:
 
 def _cleanup_task_files(task: dict[str, Any]) -> None:
     for file_key in ("audio_file_path", "output_txt_path", "summary_md_path", "shownotes", "summarize", "summarize_en"):
-        file_path = task.get(file_key)
-        if not file_path:
-            continue
-        try:
-            path = Path(file_path)
-            if path.exists():
-                path.unlink()
-        except OSError:
-            continue
+        _delete_file_reference(task.get(file_key))
+
+
+def _cleanup_source_files(task: dict[str, Any]) -> None:
+    for file_key in ("audio_file_path", "output_txt_path", "shownotes"):
+        _delete_file_reference(task.get(file_key))
+
+
+def _delete_file_reference(file_path: str | None) -> None:
+    if not file_path:
+        return
+    try:
+        path = Path(file_path)
+        if path.exists():
+            path.unlink()
+    except OSError:
+        return
+
+
+def _is_running_task(task: dict[str, Any]) -> bool:
+    return task.get("status") in {"queued", "running", "cancelling"}
+
+
+def _archive_task(task: dict[str, Any], db_path: str | Path) -> dict[str, Any]:
+    _cleanup_source_files(task)
+    archived = update_task(
+        task["id"],
+        {
+            "status": "archived",
+            "progress_stage": "archived",
+            "cancel_requested": 0,
+            "pending_action": "",
+            "audio_file_path": None,
+            "output_txt_path": None,
+            "shownotes": "",
+            "finished_at": datetime.now(timezone.utc).isoformat(),
+        },
+        db_path,
+    )
+    add_task_event(task["id"], "Task archived", db_path=db_path)
+    return archived
 
 
 def _reset_task_for_run() -> dict[str, Any]:
@@ -436,8 +489,13 @@ def _handle_cancellation(task_id: int, db_path: str | Path, executor: Executor |
     if task is None:
         return
 
-    _cleanup_task_files(task)
     pending_action = task.get("pending_action", "")
+
+    if pending_action == "archive":
+        _archive_task(task, db_path)
+        return
+
+    _cleanup_task_files(task)
 
     if pending_action == "delete":
         delete_task(task_id, db_path)

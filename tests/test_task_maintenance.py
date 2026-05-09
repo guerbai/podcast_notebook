@@ -121,6 +121,36 @@ def test_maintain_tasks_keeps_completed_task_with_old_start_time(tmp_path):
     assert get_task(task["id"], db_path)["status"] == "completed"
 
 
+def test_maintain_tasks_keeps_archived_task_with_old_start_time(tmp_path):
+    db_path = tmp_path / "app.db"
+    init_db(db_path)
+    task = create_task(
+        {
+            "podcast_title": "商业就是这样",
+            "rss_url": "http://example.com/feed.xml",
+            "episode_title": "已经归档的单集",
+            "audio_url": "http://example.com/audio.mp3",
+        },
+        db_path,
+    )
+    now = datetime(2026, 5, 3, 12, 0, tzinfo=timezone.utc)
+    update_task(
+        task["id"],
+        {
+            "status": "archived",
+            "progress_stage": "archived",
+            "started_at": (now - timedelta(hours=2)).isoformat(),
+            "transcription_percent": 100.0,
+        },
+        db_path,
+    )
+
+    result = maintain_tasks(db_path=db_path, now=now, executor=NoopExecutor())
+
+    assert result.restarted_task_ids == []
+    assert get_task(task["id"], db_path)["status"] == "archived"
+
+
 def test_maintain_tasks_deletes_audio_when_summary_file_is_older_than_24_hours(tmp_path):
     db_path = tmp_path / "app.db"
     init_db(db_path)
