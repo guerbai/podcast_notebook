@@ -10,7 +10,7 @@ const state = {
   highlightedTaskId: null,
   highlightTimer: null,
   isCreatingTask: false,
-  confirmDeleteTaskId: null,
+  confirmArchiveTaskId: null,
   summaries: new Map(),
   taskFiles: new Map(),
   podcastResults: [],
@@ -34,7 +34,7 @@ const selectedPodcastLabel = document.querySelector("#selected-podcast");
 const episodeSubhead = document.querySelector("#episode-subhead");
 const toastRegion = document.querySelector('[data-role="toast-region"]');
 const confirmModal = document.querySelector('[data-role="confirm-modal"]');
-const confirmDeleteButton = document.querySelector("#confirm-delete-task");
+const confirmArchiveButton = document.querySelector("#confirm-archive-task");
 const summaryModal = document.querySelector('[data-role="summary-modal"]');
 const summaryContent = document.querySelector("#summary-content");
 const summaryKicker = summaryModal.querySelector(".modal-kicker");
@@ -44,11 +44,11 @@ const languageOptions = document.querySelectorAll("[data-language-option]");
 const TRANSLATIONS = {
   "zh-CN": {
     pageTitle: "播客笔记本",
-    modalDeleteKicker: "删除确认",
-    modalDeleteTitle: "要删除这个任务吗？",
-    modalDeleteCopy: "关联的本地音频、全文稿和事件日志也会一起删除，运行中的任务会先停止，再完成清理",
+    modalArchiveKicker: "归档确认",
+    modalArchiveTitle: "要归档这个任务吗？",
+    modalArchiveCopy: "本地音频、单集介绍和全文稿会被删除，总结和任务记录会保留，运行中的任务会先停止",
     keepTask: "先保留",
-    confirmDelete: "确认删除",
+    confirmArchive: "确认归档",
     summaryKicker: "节目总结",
     summaryTitle: "总结内容",
     close: "关闭",
@@ -77,6 +77,7 @@ const TRANSLATIONS = {
     statusOptionAll: "状态",
     statusInProgress: "进行中",
     statusCompleted: "已完成",
+    statusArchived: "已归档",
     emptyDefault: "还没有找到任何内容",
     requestFailed: "请求失败：{status}",
     noFilteredTasks: "当前筛选条件下没有任务",
@@ -93,11 +94,11 @@ const TRANSLATIONS = {
     episodeKicker: "单集",
     creating: "正在创建…",
     createTask: "创建任务",
-    taskDeleted: "任务已删除",
+    taskArchived: "任务已归档",
     noContent: "暂无内容",
     taskKicker: "任务 {id}",
     restart: "重新开始",
-    delete: "删除",
+    archive: "归档",
     listStatus: "列表状态",
     stage: "阶段",
     downloadProgress: "下载进度",
@@ -137,6 +138,7 @@ const TRANSLATIONS = {
       running: "执行中",
       cancelling: "停止中",
       completed: "已完成",
+      archived: "已归档",
       failed: "失败",
     },
     stageLabels: {
@@ -145,17 +147,18 @@ const TRANSLATIONS = {
       transcribing: "转写中",
       finalizing: "正在收尾",
       completed: "已完成",
+      archived: "已归档",
       failed: "执行失败",
       cancelled: "已取消",
     },
   },
   en: {
     pageTitle: "Podcast Notebook",
-    modalDeleteKicker: "Delete",
-    modalDeleteTitle: "Delete this task?",
-    modalDeleteCopy: "Local audio, transcript files, and event logs linked to this task will be removed too. Running tasks will stop before cleanup.",
+    modalArchiveKicker: "Archive",
+    modalArchiveTitle: "Archive this task?",
+    modalArchiveCopy: "Local audio, shownotes, and transcript files will be removed. Summaries and the task record will stay. Running tasks will stop first.",
     keepTask: "Keep task",
-    confirmDelete: "Delete",
+    confirmArchive: "Archive",
     summaryKicker: "Episode Summary",
     summaryTitle: "Summary",
     close: "Close",
@@ -184,6 +187,7 @@ const TRANSLATIONS = {
     statusOptionAll: "Status",
     statusInProgress: "In progress",
     statusCompleted: "Completed",
+    statusArchived: "Archived",
     emptyDefault: "Nothing here yet.",
     requestFailed: "Request failed: {status}",
     noFilteredTasks: "No tasks match the current filters.",
@@ -200,11 +204,11 @@ const TRANSLATIONS = {
     episodeKicker: "Episode",
     creating: "Creating...",
     createTask: "Create task",
-    taskDeleted: "Task deleted.",
+    taskArchived: "Task archived.",
     noContent: "No content.",
     taskKicker: "Task {id}",
     restart: "Restart",
-    delete: "Delete",
+    archive: "Archive",
     listStatus: "List status",
     stage: "Stage",
     downloadProgress: "Download",
@@ -244,6 +248,7 @@ const TRANSLATIONS = {
       running: "Running",
       cancelling: "Stopping",
       completed: "Completed",
+      archived: "Archived",
       failed: "Failed",
     },
     stageLabels: {
@@ -252,6 +257,7 @@ const TRANSLATIONS = {
       transcribing: "Transcribing",
       finalizing: "Finalizing",
       completed: "Completed",
+      archived: "Archived",
       failed: "Failed",
       cancelled: "Cancelled",
     },
@@ -312,7 +318,7 @@ function setLanguage(language) {
   if (state.selectedPodcast) {
     selectedPodcastLabel.textContent = t("currentSelected", { title: state.selectedPodcast.title });
   }
-  syncTaskPodcastFilter(state.tasks);
+  syncTaskPodcastFilter(tasksMatchingStatusFilter());
   renderTasks();
 }
 
@@ -362,13 +368,13 @@ function showToast(message, tone = "info") {
   }, 2600);
 }
 
-function openDeleteModal(taskId) {
-  state.confirmDeleteTaskId = taskId;
+function openArchiveModal(taskId) {
+  state.confirmArchiveTaskId = taskId;
   confirmModal?.removeAttribute("hidden");
 }
 
-function closeDeleteModal() {
-  state.confirmDeleteTaskId = null;
+function closeArchiveModal() {
+  state.confirmArchiveTaskId = null;
   confirmModal?.setAttribute("hidden", "hidden");
 }
 
@@ -447,6 +453,7 @@ function scrollToTask(taskId) {
 }
 
 function formatStatus(task) {
+  if (task.status === "archived") return t("statusArchived");
   return taskListStatus(task) === "completed" ? t("statusCompleted") : t("statusInProgress");
 }
 
@@ -467,6 +474,7 @@ function formatDate(value) {
 }
 
 function statusTone(task) {
+  if (task.status === "archived") return "status-archived";
   if (taskListStatus(task) === "completed") return "status-completed";
   if (task.status === "failed") return "status-failed";
   if (task.status === "cancelling") return "status-cancelling";
@@ -479,17 +487,27 @@ function progressValue(value) {
 }
 
 function taskListStatus(task) {
+  if (task.status === "archived") return "archived";
   const downloadDone = progressValue(task.download_percent) >= 100;
   const transcriptionDone = progressValue(task.transcription_percent) >= 100;
   return downloadDone && transcriptionDone && Boolean(task.summarize) ? "completed" : "in_progress";
 }
 
+function taskMatchesStatusFilter(task) {
+  const listStatus = taskListStatus(task);
+  if (state.taskFilters.status) {
+    return listStatus === state.taskFilters.status;
+  }
+  return listStatus !== "archived";
+}
+
+function tasksMatchingStatusFilter() {
+  return state.tasks.filter(taskMatchesStatusFilter);
+}
+
 function filteredTasks() {
-  return state.tasks.filter((task) => {
+  return tasksMatchingStatusFilter().filter((task) => {
     if (state.taskFilters.podcastTitle && task.podcast_title !== state.taskFilters.podcastTitle) {
-      return false;
-    }
-    if (state.taskFilters.status && taskListStatus(task) !== state.taskFilters.status) {
       return false;
     }
     return true;
@@ -787,19 +805,13 @@ async function createTask(episode, button) {
   }
 }
 
-async function deleteTask(taskId) {
+async function archiveTask(taskId) {
   setTaskPending(taskId, true);
   try {
-    const result = await fetchJson(`/api/tasks/${taskId}`, { method: "DELETE" });
-    if (result?.task?.id) {
-      showToast(result.message, "warning");
-      state.expandedTaskIds.delete(taskId);
-    } else {
-      showToast(t("taskDeleted"), "success");
-      state.taskDetails.delete(taskId);
-    }
+    await fetchJson(`/api/tasks/${taskId}`, { method: "DELETE" });
+    showToast(t("taskArchived"), "success");
+    state.taskDetails.delete(taskId);
     clearTaskFileCache(taskId);
-    state.expandedTaskIds.delete(taskId);
     await loadTasks();
   } catch (error) {
     showToast(error.message, "error");
@@ -928,7 +940,7 @@ function renderTask(task) {
     clearSummarizeLock(task.id, state.language);
   }
   const isSummarizeLockedForLanguage = !hasLocalizedSummarize && isSummarizeLocked(task.id, state.language);
-  const canGenerateSummarize = Boolean(task.output_txt_path) && !hasLocalizedSummarize && !isSummarizeLockedForLanguage;
+  const canGenerateSummarize = task.status !== "archived" && Boolean(task.output_txt_path) && !hasLocalizedSummarize && !isSummarizeLockedForLanguage;
   const summarizeLabel = isSummarizeLockedForLanguage ? t("generatingSummarize") : hasLocalizedSummarize ? t("generated") : t("notGenerated");
 
   article.innerHTML = `
@@ -943,7 +955,7 @@ function renderTask(task) {
         <div class="ledger-status-row">
           <span class="status ${statusTone(task)}">${formatStatus(task)}</span>
           <button type="button" class="icon-button" data-action="restart" title="${escapeAttribute(t("restart"))}" aria-label="${escapeAttribute(t("restart"))}" ${isPending ? "disabled" : ""}>↻</button>
-          <button type="button" class="icon-button icon-button--danger" data-action="delete" title="${escapeAttribute(t("delete"))}" aria-label="${escapeAttribute(t("delete"))}" ${isPending ? "disabled" : ""}>×</button>
+          <button type="button" class="icon-button icon-button--danger" data-action="archive" title="${escapeAttribute(t("archive"))}" aria-label="${escapeAttribute(t("archive"))}" ${isPending ? "disabled" : ""}>×</button>
         </div>
         <div class="ledger-side__time">${formatDate(task.created_at)}</div>
       </div>
@@ -979,7 +991,7 @@ function renderTask(task) {
   article.querySelector('[data-action="summarize"]')?.addEventListener("click", () => openTaskFile(task, "summarize"));
   article.querySelector('[data-action="generate-summarize"]')?.addEventListener("click", () => generateSummarize(task));
   article.querySelector('[data-action="restart"]')?.addEventListener("click", () => restartTask(task.id));
-  article.querySelector('[data-action="delete"]')?.addEventListener("click", () => openDeleteModal(task.id));
+  article.querySelector('[data-action="archive"]')?.addEventListener("click", () => openArchiveModal(task.id));
 
   if (isExpanded) {
     ensureTaskDetail(task.id, article.querySelector(".detail-body"));
@@ -1052,7 +1064,7 @@ async function loadTasks() {
   try {
     const data = await fetchJson("/api/tasks");
     state.tasks = data.items || [];
-    syncTaskPodcastFilter(state.tasks);
+    syncTaskPodcastFilter(tasksMatchingStatusFilter());
     renderTasks();
   } catch (error) {
     taskResults.innerHTML = `<p class="empty">${error.message}</p>`;
@@ -1072,18 +1084,19 @@ taskPodcastFilter?.addEventListener("change", (event) => {
 });
 taskStatusFilter?.addEventListener("change", (event) => {
   state.taskFilters.status = event.target.value;
+  syncTaskPodcastFilter(tasksMatchingStatusFilter());
   renderTasks();
 });
 
 document.querySelectorAll("[data-modal-close]")?.forEach((node) => {
-  node.addEventListener("click", closeDeleteModal);
+  node.addEventListener("click", closeArchiveModal);
 });
 
-confirmDeleteButton?.addEventListener("click", async () => {
-  const taskId = state.confirmDeleteTaskId;
-  closeDeleteModal();
+confirmArchiveButton?.addEventListener("click", async () => {
+  const taskId = state.confirmArchiveTaskId;
+  closeArchiveModal();
   if (taskId != null) {
-    await deleteTask(taskId);
+    await archiveTask(taskId);
   }
 });
 

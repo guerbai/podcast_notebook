@@ -2,7 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -140,7 +140,7 @@ def create_app(db_path: str | Path | None = None, executor: ThreadPoolExecutor |
         result = remove_task(task_id, app.state.db_path)
         if result is None:
             raise HTTPException(status_code=404, detail="Task not found")
-        return Response(status_code=204)
+        return result
 
     @app.post("/api/tasks/{task_id}/restart")
     def task_restart(task_id: int):

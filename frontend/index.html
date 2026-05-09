@@ -16,12 +16,12 @@
     <div class="modal-shell" data-role="confirm-modal" hidden>
       <div class="modal-backdrop" data-modal-close></div>
       <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
-        <p class="modal-kicker" data-i18n="modalDeleteKicker">Delete confirmation</p>
-        <h2 id="confirm-title" data-i18n="modalDeleteTitle">Delete this task?</h2>
-        <p class="modal-copy" data-i18n="modalDeleteCopy">The linked local audio, transcript, and event log will be removed too. Running tasks will stop before cleanup finishes.</p>
+        <p class="modal-kicker" data-i18n="modalArchiveKicker">Archive</p>
+        <h2 id="confirm-title" data-i18n="modalArchiveTitle">Archive this task?</h2>
+        <p class="modal-copy" data-i18n="modalArchiveCopy">Local audio, shownotes, and transcript files will be removed. Summaries and the task record will stay.</p>
         <div class="modal-actions">
           <button type="button" class="secondary-button" data-modal-close data-i18n="keepTask">Keep task</button>
-          <button type="button" class="danger-button" id="confirm-delete-task" data-i18n="confirmDelete">Delete</button>
+          <button type="button" class="danger-button" id="confirm-archive-task" data-i18n="confirmArchive">Archive</button>
         </div>
       </div>
     </div>
@@ -133,6 +133,7 @@
               <wa-option value="" data-i18n="statusOptionAll">Status</wa-option>
               <wa-option value="in_progress" data-i18n="statusInProgress">In progress</wa-option>
               <wa-option value="completed" data-i18n="statusCompleted">Completed</wa-option>
+              <wa-option value="archived" data-i18n="statusArchived">Archived</wa-option>
             </wa-select>
           </div>
           <div id="task-results" class="task-results"></div>

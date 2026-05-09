@@ -119,6 +119,40 @@ def test_check_subscriptions_skips_existing_episode_tasks(tmp_path):
     assert result.skipped_existing_count == 1
 
 
+def test_check_subscriptions_skips_archived_episode_tasks(tmp_path):
+    db_path = tmp_path / "app.db"
+    init_db(db_path)
+    now = datetime(2026, 5, 6, 10, 0, 0)
+    create_task(
+        {
+            "podcast_title": "商业就是这样",
+            "rss_url": "https://example.com/business.xml",
+            "episode_title": "今日新节目",
+            "audio_url": "https://example.com/audio.mp3",
+            "status": "archived",
+            "progress_stage": "archived",
+        },
+        db_path,
+    )
+    config = ProjectConfig(subscriptions=SubscriptionsConfig(podcasts=["商业就是这样"]))
+
+    result = check_subscriptions_once(
+        config,
+        db_path,
+        now=now,
+        search_podcasts_func=lambda query: [
+            {"title": "商业就是这样", "rss_url": "https://example.com/business.xml"}
+        ],
+        fetch_episodes_func=lambda rss_url: [_episode("今日新节目", now)],
+    )
+
+    tasks = list_tasks(db_path)
+    assert len(tasks) == 1
+    assert tasks[0]["status"] == "archived"
+    assert result.created_count == 0
+    assert result.skipped_existing_count == 1
+
+
 def test_check_subscriptions_logs_apple_search_failures(tmp_path):
     db_path = tmp_path / "app.db"
     init_db(db_path)

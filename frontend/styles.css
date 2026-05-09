@@ -688,6 +688,12 @@ wa-select {
   border-color: rgba(168, 102, 24, 0.16);
 }
 
+.status-archived {
+  background: rgba(85, 88, 79, 0.14);
+  color: #42453d;
+  border-color: rgba(85, 88, 79, 0.24);
+}
+
 .status-queued {
   background: rgba(85, 88, 79, 0.1);
   color: var(--ink-soft);
