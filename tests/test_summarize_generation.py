@@ -80,6 +80,26 @@ def test_generate_task_summarize_writes_chinese_file_and_updates_task(tmp_path):
     assert "Summarize generated for zh-CN" in events
 
 
+def test_generate_task_summarize_converts_chinese_summary_to_simplified(tmp_path):
+    db_path, task = _create_completed_task(tmp_path)
+    client = FakeSummaryClient("# AI短劇\n\n## 核心判斷\n\n對於創作者而言，技術正在改寫規則。")
+
+    updated = generate_task_summarize(
+        task["id"],
+        "zh-CN",
+        db_path,
+        client=client,
+        summaries_dir=tmp_path / "summaries",
+    )
+
+    markdown = Path(updated["summarize"]).read_text(encoding="utf-8")
+    assert "# AI短剧" in markdown
+    assert "## 核心判断" in markdown
+    assert "对于创作者而言，技术正在改写规则。" in markdown
+    assert "短劇" not in markdown
+    assert "判斷" not in markdown
+
+
 def test_generate_task_summarize_writes_english_field(tmp_path):
     db_path, task = _create_completed_task(tmp_path)
     client = FakeSummaryClient("# Summary\n\n- Model point\n")

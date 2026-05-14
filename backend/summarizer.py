@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Protocol
 
 import httpx
+from opencc import OpenCC
 
 from backend.config import ROOT_DIR, SUMMARIES_DIR, load_project_config
 from backend.db import add_task_event, get_task, update_task
@@ -91,6 +92,9 @@ class OpenAICompatibleSummaryClient:
         return content.strip()
 
 
+_TRADITIONAL_TO_SIMPLIFIED = OpenCC("t2s")
+
+
 def summary_config_from_env() -> SummaryConfig:
     project_config = load_project_config()
     if project_config.llm.api_key:
@@ -140,6 +144,7 @@ def generate_task_summarize(
     add_task_event(task_id, f"Generating summarize for {language}", db_path=db_path)
     try:
         markdown = summary_client.generate(prompt, language)
+        markdown = _normalize_summary_language(markdown, language)
         output_path = _write_summary_file(task, markdown, language, Path(summaries_dir or SUMMARIES_DIR))
     except Exception:
         add_task_event(task_id, f"Summarize failed for {language}", level="error", db_path=db_path)
@@ -148,6 +153,12 @@ def generate_task_summarize(
     updated = update_task(task_id, {field: str(output_path)}, db_path)
     add_task_event(task_id, f"Summarize generated for {language}", db_path=db_path)
     return updated
+
+
+def _normalize_summary_language(markdown: str, language: str) -> str:
+    if language != "zh-CN":
+        return markdown
+    return _TRADITIONAL_TO_SIMPLIFIED.convert(markdown)
 
 
 def build_summary_prompt(task: dict, transcript: str, shownotes: str, language: str) -> str:
