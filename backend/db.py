@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     episode_title TEXT NOT NULL,
     episode_guid TEXT,
     audio_url TEXT NOT NULL,
+    audio_duration_seconds REAL,
     shownotes TEXT NOT NULL DEFAULT '',
     summarize TEXT NOT NULL DEFAULT '',
     summarize_en TEXT NOT NULL DEFAULT '',
@@ -55,6 +56,7 @@ TASK_MIGRATIONS = {
     "shownotes": "ALTER TABLE tasks ADD COLUMN shownotes TEXT NOT NULL DEFAULT ''",
     "summarize": "ALTER TABLE tasks ADD COLUMN summarize TEXT NOT NULL DEFAULT ''",
     "summarize_en": "ALTER TABLE tasks ADD COLUMN summarize_en TEXT NOT NULL DEFAULT ''",
+    "audio_duration_seconds": "ALTER TABLE tasks ADD COLUMN audio_duration_seconds REAL",
 }
 
 
@@ -140,6 +142,7 @@ def create_task(task: dict[str, Any], db_path: str | Path | None = None) -> dict
         "episode_title": task["episode_title"],
         "episode_guid": task.get("episode_guid"),
         "audio_url": task["audio_url"],
+        "audio_duration_seconds": task.get("audio_duration_seconds"),
         "shownotes": task.get("shownotes", ""),
         "summarize": task.get("summarize", ""),
         "summarize_en": task.get("summarize_en", ""),
@@ -163,15 +166,15 @@ def create_task(task: dict[str, Any], db_path: str | Path | None = None) -> dict
             """
             INSERT INTO tasks (
                 podcast_title, rss_url, episode_title, episode_guid, audio_url,
-                shownotes, summarize, summarize_en, status, progress_stage, progress_percent, download_percent,
-                transcription_percent, cancel_requested, pending_action, audio_file_path,
-                output_txt_path, summary_md_path, error_message, created_at, started_at, finished_at
+                audio_duration_seconds, shownotes, summarize, summarize_en, status, progress_stage,
+                progress_percent, download_percent, transcription_percent, cancel_requested, pending_action,
+                audio_file_path, output_txt_path, summary_md_path, error_message, created_at, started_at, finished_at
             )
             VALUES (
                 :podcast_title, :rss_url, :episode_title, :episode_guid, :audio_url,
-                :shownotes, :summarize, :summarize_en, :status, :progress_stage, :progress_percent, :download_percent,
-                :transcription_percent, :cancel_requested, :pending_action, :audio_file_path,
-                :output_txt_path, :summary_md_path, :error_message, :created_at, :started_at, :finished_at
+                :audio_duration_seconds, :shownotes, :summarize, :summarize_en, :status, :progress_stage,
+                :progress_percent, :download_percent, :transcription_percent, :cancel_requested, :pending_action,
+                :audio_file_path, :output_txt_path, :summary_md_path, :error_message, :created_at, :started_at, :finished_at
             )
             """,
             payload,

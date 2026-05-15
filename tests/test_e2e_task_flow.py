@@ -51,3 +51,4 @@ def test_mocked_end_to_end_task_flow(tmp_path, monkeypatch):
     assert detail["output_txt_path"].endswith(".txt")
     assert detail["download_percent"] == 100
     assert detail["transcription_percent"] == 100
+    assert detail["audio_duration_seconds"] == 30.0

@@ -48,6 +48,7 @@ def test_new_task_progress_fields_default_to_zero(tmp_path):
     assert refreshed["summary_md_path"] is None
     assert refreshed["summarize"] == ""
     assert refreshed["summarize_en"] == ""
+    assert refreshed["audio_duration_seconds"] is None
 
 
 def test_create_task_stores_shownotes_reference(tmp_path):
@@ -63,6 +64,7 @@ def test_create_task_stores_shownotes_reference(tmp_path):
             "shownotes": "/tmp/shownotes.txt",
             "summarize": "/tmp/summarize.md",
             "summarize_en": "/tmp/summarize.en.md",
+            "audio_duration_seconds": 95.5,
         },
         db_path,
     )
@@ -70,3 +72,4 @@ def test_create_task_stores_shownotes_reference(tmp_path):
     assert task["shownotes"] == "/tmp/shownotes.txt"
     assert task["summarize"] == "/tmp/summarize.md"
     assert task["summarize_en"] == "/tmp/summarize.en.md"
+    assert task["audio_duration_seconds"] == 95.5

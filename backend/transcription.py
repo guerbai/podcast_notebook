@@ -33,6 +33,10 @@ def _audio_duration_seconds(audio_path: str | Path) -> float:
         return float(container.duration / 1_000_000)
 
 
+def audio_duration_seconds(audio_path: str | Path) -> float:
+    return _audio_duration_seconds(audio_path)
+
+
 def _configure_hf_environment() -> None:
     hf_home = MODELS_DIR / "hf-home"
     hub_cache = hf_home / "hub"

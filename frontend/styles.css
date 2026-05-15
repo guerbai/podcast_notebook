@@ -537,6 +537,25 @@ select:focus {
   line-height: 1.35;
 }
 
+.episode-card__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.audio-duration-meta {
+  color: var(--ink-soft);
+  font-weight: 400;
+}
+
+.audio-duration-meta.is-missing {
+  color: var(--muted);
+  font-weight: 400;
+}
+
 .episode-card__actions {
   min-width: 0;
   display: flex;
@@ -636,10 +655,10 @@ wa-select {
 }
 
 .ledger-side {
-  min-width: 126px;
+  min-width: 138px;
   display: grid;
   justify-items: end;
-  gap: 8px;
+  gap: 7px;
 }
 
 .ledger-status-row {
@@ -651,6 +670,19 @@ wa-select {
 
 .ledger-side__time {
   font-size: 0.84rem;
+}
+
+.ledger-side__duration {
+  font-size: 0.78rem;
+  line-height: 1.3;
+  color: var(--muted);
+  font-weight: 400;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ledger-side__duration.is-missing {
+  color: var(--muted);
 }
 
 .status {
@@ -717,14 +749,15 @@ wa-select {
 .ledger-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 6px 14px;
   font-size: 0.82rem;
+  line-height: 1.35;
 }
 
 .ledger-meta span {
-  padding: 4px 7px;
-  border-radius: 999px;
-  background: rgba(233, 228, 216, 0.56);
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
 }
 
 .ledger-progress {
@@ -1025,6 +1058,11 @@ wa-select {
     justify-items: start;
     justify-content: start;
     min-width: 0;
+  }
+
+  .ledger-side__duration {
+    text-align: left;
+    white-space: normal;
   }
 
   .ledger-status-row {

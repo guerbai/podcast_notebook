@@ -39,12 +39,15 @@ class SummarizeGenerateRequest(BaseModel):
 
 
 def _episode_list_item(episode: dict[str, Any]) -> dict[str, Any]:
-    return {
+    item = {
         "title": episode.get("title", ""),
         "guid": episode.get("guid"),
         "audio_url": episode.get("audio_url", ""),
         "published": episode.get("published", ""),
     }
+    if episode.get("audio_duration_seconds") is not None:
+        item["audio_duration_seconds"] = episode["audio_duration_seconds"]
+    return item
 
 
 def create_app(db_path: str | Path | None = None, executor: ThreadPoolExecutor | None = None) -> FastAPI:

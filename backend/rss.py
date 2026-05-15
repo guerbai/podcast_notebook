@@ -41,6 +41,33 @@ def _extract_shownotes(entry: dict[str, Any]) -> str:
     return (entry.get("summary", "") or entry.get("description", "")).strip()
 
 
+def _parse_duration_seconds(value: Any) -> float | None:
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return float(value) if value >= 0 else None
+
+    text = str(value).strip()
+    if not text:
+        return None
+    try:
+        if ":" not in text:
+            seconds = float(text)
+            return seconds if seconds >= 0 else None
+
+        total = 0.0
+        for part in text.split(":"):
+            if not part:
+                return None
+            number = float(part)
+            if number < 0:
+                return None
+            total = total * 60 + number
+        return total
+    except ValueError:
+        return None
+
+
 def normalize_episodes(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
     episodes = []
     for entry in entries:
@@ -56,6 +83,7 @@ def normalize_episodes(entries: list[dict[str, Any]]) -> list[dict[str, Any]]:
                 "published": entry.get("published", ""),
                 "published_parsed": entry.get("published_parsed"),
                 "shownotes": _extract_shownotes(entry),
+                "audio_duration_seconds": _parse_duration_seconds(entry.get("itunes_duration")),
             }
         )
     return episodes

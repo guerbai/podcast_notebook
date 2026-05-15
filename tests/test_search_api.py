@@ -47,6 +47,31 @@ def test_episode_search_returns_lightweight_items(monkeypatch):
     }
 
 
+def test_episode_search_returns_audio_duration_when_available(monkeypatch):
+    def fake_fetch_episodes(rss_url, q):
+        return [
+            {
+                "title": "短节目",
+                "guid": "episode-2",
+                "audio_url": "https://example.com/short.mp3",
+                "audio_duration_seconds": 185.0,
+                "published": "2026-05-02",
+                "shownotes": "<p>very long shownotes</p>",
+            }
+        ]
+
+    monkeypatch.setattr(app_module, "fetch_episodes", fake_fetch_episodes)
+    client = TestClient(create_app())
+
+    response = client.get(
+        "/api/search/episodes",
+        params={"rss_url": "https://example.com/feed.xml", "q": "短"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["items"][0]["audio_duration_seconds"] == 185.0
+
+
 def test_episode_search_respects_limit(monkeypatch):
     monkeypatch.setattr(
         app_module,
