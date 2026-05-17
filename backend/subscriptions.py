@@ -142,6 +142,7 @@ def _check_podcast_feed(
             "episode_title": title,
             "episode_guid": episode.get("guid"),
             "audio_url": audio_url,
+            "audio_duration_seconds": episode.get("audio_duration_seconds"),
             "shownotes": episode.get("shownotes", ""),
         }
         if create_task_func is not None:

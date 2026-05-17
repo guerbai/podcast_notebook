@@ -139,3 +139,18 @@ def test_normalize_episodes_prefers_content_encoded_for_shownotes():
     )
 
     assert episodes[0]["shownotes"] == "<p>full shownotes</p>"
+
+
+def test_normalize_episodes_extracts_itunes_duration_seconds():
+    episodes = normalize_episodes(
+        [
+            {
+                "title": "Short episode",
+                "id": "episode-1",
+                "enclosures": [{"href": "https://example.com/audio.mp3"}],
+                "itunes_duration": "1:02:03",
+            }
+        ]
+    )
+
+    assert episodes[0]["audio_duration_seconds"] == 3723

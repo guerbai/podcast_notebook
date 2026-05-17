@@ -21,12 +21,15 @@ def test_create_task_returns_queued_task(tmp_path):
         "rss_url": "http://example.com/feed.xml",
         "episode_title": "vol.1385 从小龙虾跑路到Codex",
         "audio_url": "http://example.com/audio.mp3",
+        "audio_duration_seconds": 185.0,
     }
     response = client.post("/api/tasks", json=payload)
     body = response.json()
     assert response.status_code == 201
     assert body["result"] == "created"
     assert body["task"]["status"] == "queued"
+    assert body["task"]["audio_duration_seconds"] == 185.0
+    assert client.get(f"/api/tasks/{body['task']['id']}").json()["audio_duration_seconds"] == 185.0
 
 
 def test_create_task_accepts_and_returns_shownotes(tmp_path, monkeypatch):
@@ -366,6 +369,30 @@ def test_task_summarize_endpoint_returns_english_content_when_requested(tmp_path
     assert response.json()["title"] == "Summary"
     assert response.json()["content"].startswith("# Summary")
     assert response.json()["path"] == str(en_path)
+
+
+def test_task_detail_backfills_audio_duration_from_local_audio(tmp_path, monkeypatch):
+    import backend.tasks as task_module
+
+    client = TestClient(create_app(db_path=tmp_path / "app.db", executor=NoopExecutor()))
+    payload = {
+        "podcast_title": "大内密谈",
+        "rss_url": "http://example.com/feed.xml",
+        "episode_title": "vol.1385 从小龙虾跑路到Codex",
+        "audio_url": "http://example.com/audio.mp3",
+    }
+    task = client.post("/api/tasks", json=payload).json()["task"]
+    audio_path = tmp_path / "downloads" / "episode.mp3"
+    audio_path.parent.mkdir(parents=True)
+    audio_path.write_bytes(b"audio")
+    update_task(task["id"], {"audio_file_path": str(audio_path)}, tmp_path / "app.db")
+    monkeypatch.setattr(task_module, "audio_duration_seconds", lambda path: 185.0)
+
+    response = client.get(f"/api/tasks/{task['id']}")
+
+    assert response.status_code == 200
+    assert response.json()["audio_duration_seconds"] == 185.0
+    assert get_task(task["id"], tmp_path / "app.db")["audio_duration_seconds"] == 185.0
 
 
 def test_generate_summarize_endpoint_returns_503_without_api_key(tmp_path, monkeypatch):

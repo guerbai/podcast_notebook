@@ -115,6 +115,9 @@ const TRANSLATIONS = {
     generatingSummarize: "正在生成总结…",
     summarizeGenerated: "总结已生成",
     loadingDetails: "正在加载详情…",
+    audioDuration: "音频时长",
+    audioDurationMissing: "未记录音频时长",
+    audioDurationUnknown: "时长未知",
     files: "文件",
     transcriptPending: "转写全文尚未生成",
     audioPending: "当前没有保留音频文件",
@@ -225,6 +228,9 @@ const TRANSLATIONS = {
     generatingSummarize: "Generating summary...",
     summarizeGenerated: "Summary generated.",
     loadingDetails: "Loading details...",
+    audioDuration: "Audio duration",
+    audioDurationMissing: "Audio duration not recorded",
+    audioDurationUnknown: "Duration unknown",
     files: "Files",
     transcriptPending: "Transcript has not been generated yet.",
     audioPending: "No local audio file is retained.",
@@ -471,6 +477,35 @@ function formatDate(value) {
     hour: "2-digit",
     minute: "2-digit",
   }).format(date);
+}
+
+function formatAudioDuration(value) {
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds) || seconds <= 0) return t("audioDurationMissing");
+
+  const totalSeconds = Math.max(1, Math.round(seconds));
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const remainingSeconds = totalSeconds % 60;
+
+  if (state.language === "zh-CN") {
+    if (hours > 0) return `${hours}小时${String(minutes).padStart(2, "0")}分`;
+    if (minutes > 0) return `${minutes}分${String(remainingSeconds).padStart(2, "0")}秒`;
+    return `${remainingSeconds}秒`;
+  }
+
+  if (hours > 0) return `${hours}h ${String(minutes).padStart(2, "0")}m`;
+  if (minutes > 0) return `${minutes}m ${String(remainingSeconds).padStart(2, "0")}s`;
+  return `${remainingSeconds}s`;
+}
+
+function hasAudioDuration(value) {
+  const seconds = Number(value);
+  return Number.isFinite(seconds) && seconds > 0;
+}
+
+function formatAudioDurationMeta(value) {
+  return hasAudioDuration(value) ? `${t("audioDuration")} ${formatAudioDuration(value)}` : t("audioDurationUnknown");
 }
 
 function statusTone(task) {
@@ -749,13 +784,17 @@ async function searchEpisodes() {
 function renderEpisodeResult(item) {
   const wrapper = document.createElement("article");
   wrapper.className = "episode-card";
+  const durationClass = hasAudioDuration(item.audio_duration_seconds) ? "" : " is-missing";
 
   const body = document.createElement("div");
   body.className = "episode-card__body";
   body.innerHTML = `
     <span class="kicker">${escapeHtml(t("episodeKicker"))}</span>
     <strong>${escapeHtml(item.title)}</strong>
-    <span>${formatDate(item.published || "")}</span>
+    <span class="episode-card__meta">
+      <span>${formatDate(item.published || "")}</span>
+      <span class="audio-duration-meta${durationClass}">${escapeHtml(formatAudioDurationMeta(item.audio_duration_seconds))}</span>
+    </span>
   `;
 
   const actions = document.createElement("div");
@@ -788,6 +827,7 @@ async function createTask(episode, button) {
         episode_title: episode.title,
         episode_guid: episode.guid,
         audio_url: episode.audio_url,
+        audio_duration_seconds: episode.audio_duration_seconds ?? null,
       }),
     });
     await loadTasks();
@@ -942,6 +982,7 @@ function renderTask(task) {
   const isSummarizeLockedForLanguage = !hasLocalizedSummarize && isSummarizeLocked(task.id, state.language);
   const canGenerateSummarize = task.status !== "archived" && Boolean(task.output_txt_path) && !hasLocalizedSummarize && !isSummarizeLockedForLanguage;
   const summarizeLabel = isSummarizeLockedForLanguage ? t("generatingSummarize") : hasLocalizedSummarize ? t("generated") : t("notGenerated");
+  const durationClass = hasAudioDuration(task.audio_duration_seconds) ? "" : " is-missing";
 
   article.innerHTML = `
     <div class="ledger-entry__frame">
@@ -958,6 +999,7 @@ function renderTask(task) {
           <button type="button" class="icon-button icon-button--danger" data-action="archive" title="${escapeAttribute(t("archive"))}" aria-label="${escapeAttribute(t("archive"))}" ${isPending ? "disabled" : ""}>×</button>
         </div>
         <div class="ledger-side__time">${formatDate(task.created_at)}</div>
+        <div class="ledger-side__duration${durationClass}">${escapeHtml(formatAudioDurationMeta(task.audio_duration_seconds))}</div>
       </div>
     </div>
 
@@ -1021,6 +1063,10 @@ function renderDetailBody(taskId) {
       <div>
         <p class="detail-label">${escapeHtml(t("notes"))}</p>
         <p>${escapeHtml(detail.error_message || t("noError"))}</p>
+      </div>
+      <div>
+        <p class="detail-label">${escapeHtml(t("audioDuration"))}</p>
+        <p>${escapeHtml(formatAudioDuration(detail.audio_duration_seconds))}</p>
       </div>
       <div>
         <p class="detail-label">${escapeHtml(t("shownotesFile"))}</p>

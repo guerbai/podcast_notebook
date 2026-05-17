@@ -23,7 +23,7 @@ from backend.db import (
 )
 from backend.downloads import download_audio, guess_audio_filename
 from backend.rss import fetch_episodes
-from backend.transcription import sanitize_filename, transcribe_audio
+from backend.transcription import audio_duration_seconds, sanitize_filename, transcribe_audio
 
 
 class TaskCreate(BaseModel):
@@ -33,6 +33,7 @@ class TaskCreate(BaseModel):
     rss_url: str = Field(min_length=1)
     episode_title: str = Field(min_length=1)
     audio_url: str = Field(min_length=1)
+    audio_duration_seconds: float | None = Field(default=None, ge=0)
     episode_guid: str | None = None
     shownotes: str = ""
 
@@ -70,8 +71,13 @@ def enqueue_task(payload: TaskCreate, db_path: str | Path, executor: Executor) -
             task_payload = _ensure_shownotes(raw_payload)
         else:
             task_payload = raw_payload
+        updates = {}
         if not existing.get("shownotes") and task_payload.get("shownotes"):
-            existing = update_task(existing["id"], {"shownotes": task_payload["shownotes"]}, db_path)
+            updates["shownotes"] = task_payload["shownotes"]
+        if existing.get("audio_duration_seconds") is None and task_payload.get("audio_duration_seconds") is not None:
+            updates["audio_duration_seconds"] = task_payload["audio_duration_seconds"]
+        if updates:
+            existing = update_task(existing["id"], updates, db_path)
         return {
             "task": existing,
             "result": "existing",
@@ -93,6 +99,7 @@ def get_task_detail(task_id: int, db_path: str | Path) -> dict[str, Any] | None:
     task = get_task(task_id, db_path)
     if task is None:
         return None
+    task = _backfill_audio_duration(task, db_path)
     task["events"] = list_task_events(task_id, db_path)
     return task
 
@@ -142,6 +149,26 @@ def _markdown_title(markdown: str) -> str:
 
 def list_task_details(db_path: str | Path) -> list[dict[str, Any]]:
     return list_tasks(db_path)
+
+
+def _backfill_audio_duration(task: dict[str, Any], db_path: str | Path) -> dict[str, Any]:
+    if task.get("audio_duration_seconds") is not None:
+        return task
+    audio_path_value = task.get("audio_file_path")
+    if not audio_path_value:
+        return task
+
+    try:
+        audio_path = Path(audio_path_value)
+        if not audio_path.is_file():
+            return task
+        duration = audio_duration_seconds(audio_path)
+    except Exception:
+        return task
+
+    if duration <= 0:
+        return task
+    return update_task(task["id"], {"audio_duration_seconds": duration}, db_path)
 
 
 def migrate_shownotes_to_files(db_path: str | Path) -> None:
@@ -195,6 +222,7 @@ def restart_task(task_id: int, db_path: str | Path, executor: Executor) -> dict[
         "episode_title": task["episode_title"],
         "episode_guid": task.get("episode_guid"),
         "audio_url": task["audio_url"],
+        "audio_duration_seconds": task.get("audio_duration_seconds"),
         "shownotes": shownotes,
     }
     _cleanup_task_files(task)
@@ -342,16 +370,15 @@ def run_task(task_id: int, db_path: str | Path, executor: Executor | None = None
         def on_transcription(processed_seconds: float, total_seconds: float, message: str) -> None:
             _raise_if_cancel_requested(task_id, db_path)
             transcription_percent = min(processed_seconds / total_seconds, 1.0) * 100.0 if total_seconds else 0.0
-            update_task(
-                task_id,
-                {
-                    "status": _current_status(task_id, db_path),
-                    "progress_stage": "transcribing",
-                    "progress_percent": min(45.0 + transcription_percent * 0.5, 95.0),
-                    "transcription_percent": min(transcription_percent, 100.0),
-                },
-                db_path,
-            )
+            updates = {
+                "status": _current_status(task_id, db_path),
+                "progress_stage": "transcribing",
+                "progress_percent": min(45.0 + transcription_percent * 0.5, 95.0),
+                "transcription_percent": min(transcription_percent, 100.0),
+            }
+            if total_seconds > 0:
+                updates["audio_duration_seconds"] = total_seconds
+            update_task(task_id, updates, db_path)
             if message:
                 add_task_event(task_id, message[:500], db_path=db_path)
 

@@ -62,8 +62,8 @@ def test_frontend_exposes_language_toggle_and_i18n_dictionaries():
     assert 'lang=${state.language}' in script
     assert "播客笔记本" in script
     assert "Podcast Notebook" in script
-    assert "/static/app.js?v=20260503-summarize-lock-fix" in html
-    assert "/static/styles.css?v=20260503-summarize-lock-fix" in html
+    assert "/static/app.js?v=20260515-audio-duration" in html
+    assert "/static/styles.css?v=20260515-audio-duration" in html
 
 
 def test_frontend_chinese_copy_omits_sentence_periods():
@@ -304,6 +304,34 @@ def test_frontend_exposes_manual_summarize_generation_for_eligible_tasks():
     assert "setSummarizeLock(task.id, state.language)" in script
     assert "clearSummarizeLock(task.id, state.language)" in script
     assert 'showToast(t("summarizeGenerated"), "success")' in script
+
+
+def test_frontend_task_detail_displays_audio_duration():
+    script = Path("frontend/app.js").read_text(encoding="utf-8")
+    styles = Path("frontend/styles.css").read_text(encoding="utf-8")
+
+    assert "音频时长" in script
+    assert "Audio duration" in script
+    assert "未记录音频时长" in script
+    assert "Audio duration not recorded" in script
+    assert "时长未知" in script
+    assert "function formatAudioDuration" in script
+    assert "function formatAudioDurationMeta" in script
+    assert "function hasAudioDuration" in script
+    assert "detail.audio_duration_seconds" in script
+    assert "episode.audio_duration_seconds ?? null" in script
+    assert "episode-card__meta" in script
+    assert "ledger-side__duration" in script
+    assert "padStart" in script
+    assert " 小时 " not in script
+    assert " 分" not in script
+    assert "ledger-side__duration-value" not in script
+    assert "<strong>${escapeHtml(formatAudioDurationMeta(task.audio_duration_seconds))}</strong>" not in script
+    assert "audioDurationMeta" not in script
+    assert ".episode-card__meta" in styles
+    assert ".ledger-side__duration" in styles
+    assert ".ledger-side__duration-value" not in styles
+    assert ".ledger-side__duration strong" not in styles
 
 
 def test_frontend_generated_summary_takes_priority_over_local_lock():

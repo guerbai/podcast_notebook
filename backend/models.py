@@ -10,6 +10,7 @@ class TaskRecord:
     episode_title: str
     episode_guid: str | None
     audio_url: str
+    audio_duration_seconds: float | None
     shownotes: str
     summarize: str
     status: str
