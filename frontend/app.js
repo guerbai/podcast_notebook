@@ -680,14 +680,16 @@ function renderMarkdown(markdown) {
       html.push(`<h1>${renderInlineMarkdown(safe.slice(2))}</h1>`);
       continue;
     }
-    if (/^\d+\.\s+/.test(safe)) {
+    const orderedMatch = safe.match(/^(\d+)\.\s+(.+)/);
+    if (orderedMatch) {
       flushParagraph();
       if (listType !== "ol") {
         closeList();
         listType = "ol";
-        html.push("<ol>");
+        const startAttribute = orderedMatch[1] === "1" ? "" : ` start="${orderedMatch[1]}"`;
+        html.push(`<ol${startAttribute}>`);
       }
-      html.push(`<li>${renderInlineMarkdown(safe.replace(/^\d+\.\s+/, ""))}</li>`);
+      html.push(`<li>${renderInlineMarkdown(orderedMatch[2])}</li>`);
       continue;
     }
     if (safe.startsWith("- ")) {

@@ -173,8 +173,10 @@ def build_summary_prompt(task: dict, transcript: str, shownotes: str, language: 
             "Output contract:",
             "- Return only the requested summary Markdown.",
             "- Start with a single H1 title for the episode, then use H2 sections chosen from the episode type.",
+            "- Make the H1 faithful to the episode title; translate it only when the output language requires it, and keep proper nouns recognizable.",
             "- Use only two heading levels: `#` for the episode title and `##` for top-level sections.",
             "- Do not use ### or deeper Markdown headings. If a section needs subdivisions, use bold lead labels inside normal paragraphs or bullets.",
+            "- Do not use numbered-list items as subsection lead labels, such as `1. **Topic**`; write `**Topic**` as a standalone bold lead label instead.",
             "- Do not mention task ids, file paths, database updates, API verification, or completion status.",
             "- Match the density of existing agent-generated summaries: preserve the episode's main logic, examples, mechanisms, risks, limitations, and implications.",
             "- For a substantial Chinese episode, prefer roughly 1200-2200 Chinese characters; use 2200-3000 for dense episodes.",
@@ -291,6 +293,10 @@ def _normalize_summary_markdown(markdown: str) -> str:
             match = re.match(r"^(#{3,})\s+(.+?)\s*$", line)
             if match:
                 normalized_lines.append(f"**{match.group(2).strip()}**")
+                continue
+            lead_label_match = re.match(r"^\s*\d+\.\s+\*\*(.+?)\*\*\s*$", line)
+            if lead_label_match:
+                normalized_lines.append(f"**{lead_label_match.group(1).strip()}**")
                 continue
         normalized_lines.append(line)
     return "\n".join(normalized_lines)

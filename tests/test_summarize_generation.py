@@ -185,6 +185,32 @@ def test_generate_task_summarize_normalizes_nested_markdown_headings(tmp_path):
     assert "**更深层标题**" in markdown
 
 
+def test_generate_task_summarize_normalizes_numbered_bold_lead_labels(tmp_path):
+    db_path, task = _create_completed_task(tmp_path)
+    client = FakeSummaryClient(
+        "# 标题\n\n"
+        "## 主题线索\n\n"
+        "1. **冠军悬念的解开**  \n\n"
+        "阿森纳释放压力。\n\n"
+        "2. **瓜迪奥拉留下的空白**\n\n"
+        "曼城进入新阶段。\n"
+    )
+
+    updated = generate_task_summarize(
+        task["id"],
+        "zh-CN",
+        db_path,
+        client=client,
+        summaries_dir=tmp_path / "summaries",
+    )
+
+    markdown = Path(updated["summarize"]).read_text(encoding="utf-8")
+    assert "1. **冠军悬念的解开**" not in markdown
+    assert "2. **瓜迪奥拉留下的空白**" not in markdown
+    assert "**冠军悬念的解开**" in markdown
+    assert "**瓜迪奥拉留下的空白**" in markdown
+
+
 def test_summary_prompt_excludes_agent_operational_steps():
     prompt = build_summary_prompt(
         {
@@ -208,6 +234,24 @@ def test_summary_prompt_excludes_agent_operational_steps():
     assert "Do not mention task ids, file paths, database updates, API verification" in prompt
     assert "Use only two heading levels" in prompt
     assert "Do not use ###" in prompt
+
+
+def test_summary_prompt_includes_sports_music_technology_templates():
+    prompt = build_summary_prompt(
+        {
+            "podcast_title": "The Rest Is Football",
+            "episode_title": "ARSENAL: PREMIER LEAGUE CHAMPIONS",
+        },
+        "完整转写内容",
+        "单集介绍内容",
+        "zh-CN",
+    )
+
+    assert "Sports / football commentary" in prompt
+    assert "Music / artist / album / industry" in prompt
+    assert "Technology / AI / product / developer practice" in prompt
+    assert "Do not use numbered-list items as subsection lead labels" in prompt
+    assert "Make the H1 faithful to the episode title" in prompt
 
 
 def test_english_summary_prompt_requires_english_section_headings():
