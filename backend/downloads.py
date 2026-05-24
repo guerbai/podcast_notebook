@@ -9,6 +9,10 @@ from urllib.parse import urlparse
 import httpx
 
 
+CURL_MAX_ATTEMPTS = 6
+CURL_RETRY_DELAY_SECONDS = 2
+
+
 def build_download_record(audio_url: str, destination: str | Path) -> dict[str, str | int]:
     return {
         "audio_url": audio_url,
@@ -89,30 +93,21 @@ def _probe_content_length_with_curl(audio_url: str) -> int:
     return total
 
 
-def _download_with_curl(audio_url: str, destination: str | Path, progress_callback=None) -> Path:
-    path = Path(destination)
-    curl_path = shutil.which("curl")
-    if not curl_path:
-        raise RuntimeError("curl is not available")
+def _partial_download_path(destination: Path) -> Path:
+    return Path(f"{destination}.part")
 
-    total = _probe_content_length_with_curl(audio_url)
-    command = [
-        curl_path,
-        "--location",
-        "--fail",
-        "--silent",
-        "--show-error",
-        "--user-agent",
-        "Mozilla/5.0",
-        "--output",
-        str(path),
-        audio_url,
-    ]
+
+def _download_with_curl_once(
+    command: list[str],
+    observed_path: Path,
+    total: int,
+    progress_callback=None,
+) -> None:
     process = subprocess.Popen(command)
     last_reported = -1
 
     while True:
-        current = path.stat().st_size if path.exists() else 0
+        current = observed_path.stat().st_size if observed_path.exists() else 0
         if progress_callback and current != last_reported:
             try:
                 progress_callback(current, total)
@@ -129,6 +124,54 @@ def _download_with_curl(audio_url: str, destination: str | Path, progress_callba
             break
         time.sleep(0.25)
 
+
+def _download_with_curl(audio_url: str, destination: str | Path, progress_callback=None) -> Path:
+    path = Path(destination)
+    partial_path = _partial_download_path(path)
+    curl_path = shutil.which("curl")
+    if not curl_path:
+        raise RuntimeError("curl is not available")
+
+    if path.exists():
+        path.unlink()
+
+    total = _probe_content_length_with_curl(audio_url)
+    command = [
+        curl_path,
+        "--location",
+        "--fail",
+        "--silent",
+        "--show-error",
+        "--continue-at",
+        "-",
+        "--user-agent",
+        "Mozilla/5.0",
+        "--output",
+        str(partial_path),
+        audio_url,
+    ]
+
+    if total and partial_path.exists() and partial_path.stat().st_size >= total:
+        partial_path.replace(path)
+        if progress_callback:
+            progress_callback(total, total)
+        return path
+
+    last_error: subprocess.CalledProcessError | None = None
+    for attempt in range(CURL_MAX_ATTEMPTS):
+        try:
+            _download_with_curl_once(command, partial_path, total, progress_callback=progress_callback)
+            break
+        except subprocess.CalledProcessError as exc:
+            last_error = exc
+            if attempt + 1 >= CURL_MAX_ATTEMPTS:
+                raise
+            time.sleep(CURL_RETRY_DELAY_SECONDS)
+
+    if last_error is not None and not partial_path.exists():
+        raise last_error
+
+    partial_path.replace(path)
     final_size = path.stat().st_size if path.exists() else 0
     if progress_callback:
         progress_callback(final_size, total or final_size)

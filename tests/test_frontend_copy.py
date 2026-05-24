@@ -341,6 +341,14 @@ def test_frontend_generated_summary_takes_priority_over_local_lock():
     assert "if (hasLocalizedSummarize) {\n    clearSummarizeLock(task.id, state.language);\n  }" in script
 
 
+def test_markdown_renderer_preserves_ordered_list_start_numbers():
+    script = Path("frontend/app.js").read_text(encoding="utf-8")
+
+    assert "const orderedMatch = safe.match(/^(\\d+)\\.\\s+(.+)/);" in script
+    assert 'const startAttribute = orderedMatch[1] === "1" ? "" : ` start="${orderedMatch[1]}"`;' in script
+    assert "html.push(`<ol${startAttribute}>`);" in script
+
+
 def test_podcast_search_results_use_stable_layout():
     html = Path("frontend/index.html").read_text(encoding="utf-8")
     script = Path("frontend/app.js").read_text(encoding="utf-8")

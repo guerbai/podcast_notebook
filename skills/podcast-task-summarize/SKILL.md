@@ -122,9 +122,16 @@ Classify the episode from `podcast_title`, `episode_title`, shownotes, and trans
 - **Finance / investing**: use `核心判断 / 市场变量 / 资产或行业观点 / 操作启发 / 结论与启发`.
   - Focus on variables such as rates, valuation, earnings, policy, liquidity, fund flows, time horizon, and risk preference.
   - Examples must explain which variable changed the investment judgment.
-- **Tech interview / AI practice**: use `核心判断 / 方法框架 / 落地流程或案例 / 对企业或个人的启发 / 结论与启发`.
-  - Focus on the problem context, workflow, implementation pattern, measurable result, and limitations.
-  - Examples must explain how the technology entered the workflow and what problem it solved.
+- **Sports / football commentary**: use `核心判断 / 赛事或事件脉络 / 关键人物与技战术 / 争议与后续影响 / 结论与启发`.
+  - Focus on what happened, why it changed the table or season narrative, how players, managers, tactics, mentality, injuries, schedule, refereeing, finances, or rules shaped the outcome.
+  - Preserve pundit disagreements and judgment calls; do not turn the episode into a generic match report.
+  - Examples must explain the specific match moment, player, manager decision, club context, or rule dispute and why it matters beyond the headline.
+- **Music / artist / album / industry**: use `核心判断 / 创作与职业脉络 / 关键作品或人物 / 审美与行业观察 / 结论与启发`.
+  - Focus on sound, songwriting, performance, production, collaboration, scene history, career turns, audience reception, and music-business context.
+  - Examples must explain what is distinctive about the song, album, artist, producer, label, live scene, or era; avoid name-dropping without musical or cultural meaning.
+- **Technology / AI / product / developer practice**: use `核心判断 / 技术背景 / 方法或产品机制 / 落地案例与限制 / 结论与启发`.
+  - Focus on the problem context, architecture or workflow, implementation pattern, user or business effect, measurable result, and limitations.
+  - Examples must explain how the technology enters the workflow, what problem it solves, what tradeoffs it creates, and what remains uncertain.
 - **Culture / history / food**: use `主题线索 / 历史与地方脉络 / 关键材料或人物 / 文化含义 / 结论与启发`.
   - Focus on historical context, locality, materials, people, memory, and how meanings changed over time.
   - Examples must explain why a dish, person, place, or object matters; avoid turning the summary into a name list.
@@ -168,6 +175,8 @@ Writing structure rules:
 - `关键案例` or `主要例子` is where examples should be explained in depth using the example card.
 - `结论与启发` should synthesize and judge. It may include risks, limitations, prerequisites, and non-generalizable parts, but should not re-summarize the example list.
 - If an example is fully explained in `关键案例`, other sections may refer to it only briefly when needed for reasoning.
+- Do not use numbered-list items as subsection titles, such as `1. **冠军悬念的解开**`. Use standalone bold lead labels like `**冠军悬念的解开**` followed by prose paragraphs instead.
+- Use ordered lists only for true sequences, rankings, or procedures. If an ordered list is necessary, use explicit increasing numbers and keep each item self-contained.
 - Avoid repeated phrasing under different headings. If two sections say the same thing, merge or delete one.
 - Prefer dense, specific prose over broad summaries. The reader should finish with a clear sense of what happened, why it mattered, and what can or cannot be generalized.
 
