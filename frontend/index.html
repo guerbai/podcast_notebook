@@ -10,7 +10,7 @@
     <script>
       document.documentElement.dataset.theme = localStorage.getItem("podcast-notebook-theme") || "dark";
     </script>
-    <link rel="stylesheet" href="/static/styles.css?v=20260831-summary-compositing" />
+    <link rel="stylesheet" href="/static/styles.css?v=20260927-impeccable-ui" />
     <script type="module" src="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.2.1/dist-cdn/webawesome.loader.js"></script>
   </head>
   <body>
@@ -54,52 +54,43 @@
             </div>
           </div>
         </div>
-        <aside class="masthead-note">
-          <div class="masthead-note__top">
-            <p class="note-label">Local Archive</p>
-            <div class="top-controls">
-              <div class="language-control" aria-label="Language:" data-i18n-aria-label="languageLabel">
-                <span data-i18n="languageLabel">Language:</span>
-                <div class="language-switch" role="group" aria-label="Language">
-                  <button type="button" class="language-option" data-language-option="en" aria-pressed="true">EN</button>
-                  <button type="button" class="language-option" data-language-option="zh-CN" aria-pressed="false">中文</button>
-                </div>
+        <div class="masthead-controls">
+          <div class="top-controls">
+            <div class="language-control" aria-label="Language:" data-i18n-aria-label="languageLabel">
+              <span data-i18n="languageLabel">Language:</span>
+              <div class="language-switch" role="group" aria-label="Language">
+                <button type="button" class="language-option" data-language-option="en" aria-pressed="true">EN</button>
+                <button type="button" class="language-option" data-language-option="zh-CN" aria-pressed="false">中文</button>
               </div>
-              <div class="theme-control" aria-label="Theme:" data-i18n-aria-label="themeLabel">
-                <span data-i18n="themeLabel">Theme:</span>
-                <div class="theme-switch" role="group" aria-label="Theme">
-                  <button type="button" class="theme-option" data-theme-option="light" aria-pressed="false" aria-label="Light mode" title="Light mode" data-i18n-aria-label="themeLight" data-i18n-title="themeLight">
-                    <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <circle cx="12" cy="12" r="4"></circle>
-                      <path d="M12 2v2"></path>
-                      <path d="M12 20v2"></path>
-                      <path d="m4.93 4.93 1.41 1.41"></path>
-                      <path d="m17.66 17.66 1.41 1.41"></path>
-                      <path d="M2 12h2"></path>
-                      <path d="M20 12h2"></path>
-                      <path d="m6.34 17.66-1.41 1.41"></path>
-                      <path d="m19.07 4.93-1.41 1.41"></path>
-                    </svg>
-                  </button>
-                  <button type="button" class="theme-option" data-theme-option="dark" aria-pressed="true" aria-label="Dark mode" title="Dark mode" data-i18n-aria-label="themeDark" data-i18n-title="themeDark">
-                    <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                      <path d="M20.99 12.44a8.5 8.5 0 1 1-9.43-9.43 6.5 6.5 0 0 0 9.43 9.43Z"></path>
-                    </svg>
-                  </button>
-                </div>
+            </div>
+            <div class="theme-control" aria-label="Theme:" data-i18n-aria-label="themeLabel">
+              <span data-i18n="themeLabel">Theme:</span>
+              <div class="theme-switch" role="group" aria-label="Theme">
+                <button type="button" class="theme-option" data-theme-option="light" aria-pressed="false" aria-label="Light mode" title="Light mode" data-i18n-aria-label="themeLight" data-i18n-title="themeLight">
+                  <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <circle cx="12" cy="12" r="4"></circle>
+                    <path d="M12 2v2"></path>
+                    <path d="M12 20v2"></path>
+                    <path d="m4.93 4.93 1.41 1.41"></path>
+                    <path d="m17.66 17.66 1.41 1.41"></path>
+                    <path d="M2 12h2"></path>
+                    <path d="M20 12h2"></path>
+                    <path d="m6.34 17.66-1.41 1.41"></path>
+                    <path d="m19.07 4.93-1.41 1.41"></path>
+                  </svg>
+                </button>
+                <button type="button" class="theme-option" data-theme-option="dark" aria-pressed="true" aria-label="Dark mode" title="Dark mode" data-i18n-aria-label="themeDark" data-i18n-title="themeDark">
+                  <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                    <path d="M20.99 12.44a8.5 8.5 0 1 1-9.43-9.43 6.5 6.5 0 0 0 9.43 9.43Z"></path>
+                  </svg>
+                </button>
               </div>
-              <a class="github-link" href="https://github.com/guerbai/podcast_notebook" target="_blank" rel="noreferrer" aria-label="GitHub repository">
-                <img class="github-logo" src="/static/assets/github.svg" alt="" aria-hidden="true" />
-              </a>
             </div>
+            <a class="github-link" href="https://github.com/guerbai/podcast_notebook" target="_blank" rel="noreferrer" aria-label="GitHub repository">
+              <img class="github-logo" src="/static/assets/github.svg" alt="" aria-hidden="true" />
+            </a>
           </div>
-          <div class="masthead-note__body">
-            <div>
-              <p class="note-title" data-i18n="noteTitle">Local tasks</p>
-              <p class="note-body" data-i18n="noteBody">Transcripts, shownotes, and summaries stay linked to one task</p>
-            </div>
-          </div>
-        </aside>
+        </div>
       </header>
 
       <div class="workspace-grid">
@@ -145,7 +136,6 @@
 
         <section class="archive-sheet">
           <div class="section-heading section-heading-wide">
-            <p class="section-index">03</p>
             <div>
               <h2 data-i18n="archiveTitle">Tasks</h2>
               <p data-i18n="archiveIntro">Review progress, files, and results</p>

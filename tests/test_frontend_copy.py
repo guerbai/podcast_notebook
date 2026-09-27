@@ -63,7 +63,7 @@ def test_frontend_exposes_language_toggle_and_i18n_dictionaries():
     assert "播客笔记本" in script
     assert "Podcast Notebook" in script
     assert "/static/app.js?v=20260830-summary-modal-poll" in html
-    assert "/static/styles.css?v=20260831-summary-compositing" in html
+    assert "/static/styles.css?v=20260927-impeccable-ui" in html
 
 
 def test_frontend_chinese_copy_omits_sentence_periods():
@@ -95,9 +95,8 @@ def test_frontend_renders_brand_logo_asset_in_masthead():
     assert ".brand-lockup" in styles
     assert ".brand-copy" in styles
     assert ".brand-logo" in styles
-    assert ".masthead-copy {\n  padding: 42px 26px 24px;" in styles
-    assert "top: 20px;" in styles
-    assert ".brand-lockup {\n  display: flex;\n  align-items: flex-start;" in styles
+    assert ".masthead {\n  display: grid;" in styles
+    assert ".brand-lockup {\n  display: flex;\n  align-items: center;" in styles
     assert "color: var(--teal);" in styles
     assert 'viewBox="0 0 142 142"' in logo
     assert 'color="#235f62"' in logo
@@ -115,7 +114,7 @@ def test_frontend_renders_github_repository_link():
 
     assert 'class="masthead-actions"' not in html
     assert html.index('class="language-switch"') < html.index('class="github-link"')
-    assert 'class="masthead-note__body"' in html
+    assert 'class="masthead-controls"' in html
     assert 'class="github-link"' in html
     assert 'href="https://github.com/guerbai/podcast_notebook"' in html
     assert 'target="_blank"' in html
@@ -124,7 +123,7 @@ def test_frontend_renders_github_repository_link():
     assert 'src="/static/assets/github.svg"' in html
     assert ".masthead-actions" not in styles
     assert ".top-controls" in styles
-    assert ".masthead-note__body" in styles
+    assert ".masthead-controls" in styles
     assert ".language-switch" in styles
     assert ".language-option.is-active" in styles
     assert ".github-link" in styles
@@ -233,7 +232,7 @@ def test_frontend_includes_split_progress_and_layout_markers():
     assert "task.output_txt_path || task.audio_file_path" not in script
     assert 'class="episode-toolbar__hint"' not in html
     assert ".episode-toolbar {\n  display: block;\n}" in styles
-    assert "font-size: 1.3rem;" in styles
+    assert ".section-heading-wide h2 {\n  font-size: 2.15rem;" in styles
     assert "task-progress--download" in script
     assert "task-progress--transcription" in script
     assert "shownotes: episode.summary" not in script
