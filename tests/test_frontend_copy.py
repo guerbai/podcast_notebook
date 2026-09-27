@@ -62,8 +62,8 @@ def test_frontend_exposes_language_toggle_and_i18n_dictionaries():
     assert 'lang=${state.language}' in script
     assert "播客笔记本" in script
     assert "Podcast Notebook" in script
-    assert "/static/app.js?v=20260515-audio-duration" in html
-    assert "/static/styles.css?v=20260515-audio-duration" in html
+    assert "/static/app.js?v=20260830-summary-modal-poll" in html
+    assert "/static/styles.css?v=20260831-summary-compositing" in html
 
 
 def test_frontend_chinese_copy_omits_sentence_periods():
@@ -269,7 +269,85 @@ def test_frontend_only_shows_archived_tasks_when_archived_filter_is_selected():
     assert "function taskMatchesStatusFilter(task)" in script
     assert "return listStatus !== \"archived\";" in script
     assert "return listStatus === state.taskFilters.status;" in script
-    assert "syncTaskPodcastFilter(tasksMatchingStatusFilter())" in script
+    assert "syncTaskPodcastFilter(tasksMatchingBaseFilters())" in script
+
+
+def test_frontend_exposes_task_time_quick_filters():
+    html = Path("frontend/index.html").read_text(encoding="utf-8")
+    script = Path("frontend/app.js").read_text(encoding="utf-8")
+    styles = Path("frontend/styles.css").read_text(encoding="utf-8")
+
+    assert 'class="time-filter"' in html
+    assert 'data-time-filter="3"' in html
+    assert 'data-time-filter="7"' in html
+    assert 'data-time-filter="30"' in html
+    assert "近三天" in script
+    assert "近一周" in script
+    assert "近一个月" in script
+    assert "timeWindowDays" in script
+    assert "function taskMatchesTimeFilter(task)" in script
+    assert "const dayMs = 24 * 60 * 60 * 1000" in script
+    assert "if (days === 3) return ageMs <= 3 * dayMs;" in script
+    assert "if (days === 7) return ageMs > 3 * dayMs && ageMs <= 7 * dayMs;" in script
+    assert "if (days === 30) return ageMs > 7 * dayMs && ageMs <= 30 * dayMs;" in script
+    assert "state.taskFilters.timeWindowDays === days ? null : days" in script
+    assert ".time-filter__option.is-active" in styles
+
+
+def test_frontend_theme_toggle_uses_svg_icons():
+    html = Path("frontend/index.html").read_text(encoding="utf-8")
+    styles = Path("frontend/styles.css").read_text(encoding="utf-8")
+
+    assert 'class="theme-icon"' in html
+    assert 'data-i18n="themeLight"' not in html
+    assert 'data-i18n="themeDark"' not in html
+    assert 'data-i18n-aria-label="themeLight"' in html
+    assert 'data-i18n-aria-label="themeDark"' in html
+    assert "☀" not in html
+    assert "🌙" not in html
+    assert ".theme-icon" in styles
+
+
+def test_frontend_exposes_favorites_view_that_bypasses_other_filters():
+    html = Path("frontend/index.html").read_text(encoding="utf-8")
+    script = Path("frontend/app.js").read_text(encoding="utf-8")
+    styles = Path("frontend/styles.css").read_text(encoding="utf-8")
+
+    assert 'id="favorites-filter"' in html
+    assert 'data-action="toggle-favorites"' in html
+    assert 'data-i18n="favorites"' in html
+    assert "favoritesOnly: false" in script
+    assert "function favoriteTasks()" in script
+    assert "return state.tasks.filter((task) => Boolean(task.is_favorite));" in script
+    assert "if (state.taskFilters.favoritesOnly) return favoriteTasks();" in script
+    assert 't("noFavoriteTasks")' in script
+    assert "state.taskFilters.favoritesOnly = !state.taskFilters.favoritesOnly" in script
+    assert "function syncTaskFilterControls()" in script
+    assert "if (state.taskFilters.favoritesOnly) return;" in script
+    load_tasks_body = script.split("async function loadTasks", 1)[1].split('document.querySelector("#search-podcasts")', 1)[0]
+    assert "syncTaskFilterControls();" in load_tasks_body
+    assert "syncTaskPodcastFilter(tasksMatchingBaseFilters())" not in load_tasks_body
+    assert ".favorites-filter.is-active" in styles
+    assert "收藏" in script
+    assert "Favorites" in script
+
+
+def test_frontend_renders_and_updates_github_style_task_star():
+    script = Path("frontend/app.js").read_text(encoding="utf-8")
+    styles = Path("frontend/styles.css").read_text(encoding="utf-8")
+
+    assert 'data-action="favorite"' in script
+    assert 'class="favorite-icon" viewBox="0 0 16 16"' in script
+    assert 'task.is_favorite ? t("unfavorite") : t("favorite")' in script
+    assert "async function toggleTaskFavorite(task)" in script
+    assert 'fetchJson(`/api/tasks/${task.id}/favorite`, {' in script
+    assert 'method: "PUT"' in script
+    assert "body: JSON.stringify({ favorite: !Boolean(task.is_favorite) })" in script
+    assert "state.tasks = state.tasks.map" in script
+    assert ".icon-button--favorite.is-active" in styles
+    assert "fill: var(--teal);" in styles
+    assert "取消收藏" in script
+    assert "Unfavorite" in script
 
 
 def test_archived_status_uses_visible_badge_styling():
@@ -339,6 +417,26 @@ def test_frontend_generated_summary_takes_priority_over_local_lock():
 
     assert "const isSummarizeLockedForLanguage = !hasLocalizedSummarize && isSummarizeLocked(task.id, state.language)" in script
     assert "if (hasLocalizedSummarize) {\n    clearSummarizeLock(task.id, state.language);\n  }" in script
+
+
+def test_frontend_pauses_task_polling_while_summary_modal_is_open():
+    script = Path("frontend/app.js").read_text(encoding="utf-8")
+
+    assert "function isSummaryModalOpen()" in script
+    poll_body = script.split("function pollTasks()", 1)[1].split("function resetSummaryScroll", 1)[0]
+    assert "if (isSummaryModalOpen()) return;" in poll_body
+    assert "loadTasks();" in poll_body
+    close_body = script.split("function closeSummaryModal()", 1)[1].split("function pollTasks()", 1)[0]
+    assert "const wasOpen = isSummaryModalOpen();" in close_body
+    assert "if (wasOpen) loadTasks();" in close_body
+    assert "state.tasksPoller = window.setInterval(pollTasks, 3000);" in script
+
+
+def test_summary_modal_avoids_full_screen_backdrop_filter():
+    styles = Path("frontend/styles.css").read_text(encoding="utf-8")
+
+    summary_backdrop_rule = styles.split('[data-role="summary-modal"] .modal-backdrop {', 1)[1].split("}", 1)[0]
+    assert "backdrop-filter: none;" in summary_backdrop_rule
 
 
 def test_markdown_renderer_preserves_ordered_list_start_numbers():

@@ -1,7 +1,9 @@
 const DEFAULT_LANGUAGE = "en";
+const DEFAULT_THEME = "dark";
 
 const state = {
   language: localStorage.getItem("podcast-notebook-language") || DEFAULT_LANGUAGE,
+  theme: localStorage.getItem("podcast-notebook-theme") || DEFAULT_THEME,
   selectedPodcast: null,
   tasksPoller: null,
   taskDetails: new Map(),
@@ -18,6 +20,8 @@ const state = {
   taskFilters: {
     podcastTitle: "",
     status: "",
+    timeWindowDays: null,
+    favoritesOnly: false,
   },
 };
 
@@ -40,6 +44,9 @@ const summaryContent = document.querySelector("#summary-content");
 const summaryKicker = summaryModal.querySelector(".modal-kicker");
 const summaryTitle = document.querySelector("#summary-title");
 const languageOptions = document.querySelectorAll("[data-language-option]");
+const themeOptions = document.querySelectorAll("[data-theme-option]");
+const timeFilterOptions = document.querySelectorAll("[data-time-filter]");
+const favoritesFilter = document.querySelector("#favorites-filter");
 
 const TRANSLATIONS = {
   "zh-CN": {
@@ -57,6 +64,9 @@ const TRANSLATIONS = {
     noteTitle: "本地任务",
     noteBody: "全文、单集介绍和总结文件会关联到同一条任务",
     languageLabel: "语言：",
+    themeLabel: "主题：",
+    themeLight: "浅色模式",
+    themeDark: "暗色模式",
     searchPodcastTitle: "播客",
     searchPodcastIntro: "先找到正确播客",
     searchPodcastAction: "搜索播客",
@@ -78,9 +88,18 @@ const TRANSLATIONS = {
     statusInProgress: "进行中",
     statusCompleted: "已完成",
     statusArchived: "已归档",
+    timeFilterLabel: "时间筛选",
+    favorites: "收藏",
+    timeFilterThreeDays: "近三天",
+    timeFilterWeek: "近一周",
+    timeFilterMonth: "近一个月",
     emptyDefault: "还没有找到任何内容",
     requestFailed: "请求失败：{status}",
     noFilteredTasks: "当前筛选条件下没有任务",
+    noFavoriteTasks: "还没有收藏的单集",
+    favorite: "收藏",
+    unfavorite: "取消收藏",
+    favoriteUpdated: "收藏已更新",
     searchingPodcasts: "正在搜索播客…",
     podcastKicker: "播客",
     currentSelected: "已选：{title}",
@@ -170,6 +189,9 @@ const TRANSLATIONS = {
     noteTitle: "Local Tasks",
     noteBody: "Transcript, original notes, and summaries stay linked to the same task.",
     languageLabel: "Language:",
+    themeLabel: "Theme:",
+    themeLight: "Light mode",
+    themeDark: "Dark mode",
     searchPodcastTitle: "Podcast",
     searchPodcastIntro: "Find the right podcast feed.",
     searchPodcastAction: "Search podcast",
@@ -191,9 +213,18 @@ const TRANSLATIONS = {
     statusInProgress: "In progress",
     statusCompleted: "Completed",
     statusArchived: "Archived",
+    timeFilterLabel: "Time filter",
+    favorites: "Favorites",
+    timeFilterThreeDays: "Last 3 days",
+    timeFilterWeek: "Last week",
+    timeFilterMonth: "Last month",
     emptyDefault: "Nothing here yet.",
     requestFailed: "Request failed: {status}",
     noFilteredTasks: "No tasks match the current filters.",
+    noFavoriteTasks: "No favorite episodes yet.",
+    favorite: "Favorite",
+    unfavorite: "Unfavorite",
+    favoriteUpdated: "Favorite updated.",
     searchingPodcasts: "Searching podcasts...",
     podcastKicker: "Podcast",
     currentSelected: "Selected: {title}",
@@ -271,6 +302,7 @@ const TRANSLATIONS = {
 };
 
 const SUPPORTED_LANGUAGES = new Set(Object.keys(TRANSLATIONS));
+const SUPPORTED_THEMES = new Set(["light", "dark"]);
 
 function currentTranslations() {
   return TRANSLATIONS[state.language] || TRANSLATIONS[DEFAULT_LANGUAGE];
@@ -316,6 +348,15 @@ function applyStaticTranslations() {
   });
 }
 
+function applyTheme() {
+  document.documentElement.dataset.theme = state.theme;
+  themeOptions.forEach((button) => {
+    const isSelected = button.dataset.themeOption === state.theme;
+    button.classList.toggle("is-active", isSelected);
+    button.setAttribute("aria-pressed", String(isSelected));
+  });
+}
+
 function setLanguage(language) {
   state.language = SUPPORTED_LANGUAGES.has(language) ? language : DEFAULT_LANGUAGE;
   localStorage.setItem("podcast-notebook-language", state.language);
@@ -324,8 +365,16 @@ function setLanguage(language) {
   if (state.selectedPodcast) {
     selectedPodcastLabel.textContent = t("currentSelected", { title: state.selectedPodcast.title });
   }
-  syncTaskPodcastFilter(tasksMatchingStatusFilter());
+  syncTaskFilterControls();
+  syncTimeFilterOptions();
+  syncFavoritesFilter();
   renderTasks();
+}
+
+function setTheme(theme) {
+  state.theme = SUPPORTED_THEMES.has(theme) ? theme : DEFAULT_THEME;
+  localStorage.setItem("podcast-notebook-theme", state.theme);
+  applyTheme();
 }
 
 const PROGRESS_CLASSES = {
@@ -391,7 +440,18 @@ function openSummaryModal() {
 }
 
 function closeSummaryModal() {
+  const wasOpen = isSummaryModalOpen();
   summaryModal?.setAttribute("hidden", "hidden");
+  if (wasOpen) loadTasks();
+}
+
+function isSummaryModalOpen() {
+  return Boolean(summaryModal && !summaryModal.hasAttribute("hidden"));
+}
+
+function pollTasks() {
+  if (isSummaryModalOpen()) return;
+  loadTasks();
 }
 
 function resetSummaryScroll() {
@@ -536,12 +596,31 @@ function taskMatchesStatusFilter(task) {
   return listStatus !== "archived";
 }
 
-function tasksMatchingStatusFilter() {
-  return state.tasks.filter(taskMatchesStatusFilter);
+function taskMatchesTimeFilter(task) {
+  const days = state.taskFilters.timeWindowDays;
+  if (!days) return true;
+  const createdAt = new Date(task.created_at);
+  if (Number.isNaN(createdAt.getTime())) return false;
+  const dayMs = 24 * 60 * 60 * 1000;
+  const ageMs = Date.now() - createdAt.getTime();
+  if (ageMs < 0) return true;
+  if (days === 3) return ageMs <= 3 * dayMs;
+  if (days === 7) return ageMs > 3 * dayMs && ageMs <= 7 * dayMs;
+  if (days === 30) return ageMs > 7 * dayMs && ageMs <= 30 * dayMs;
+  return true;
+}
+
+function tasksMatchingBaseFilters() {
+  return state.tasks.filter((task) => taskMatchesStatusFilter(task) && taskMatchesTimeFilter(task));
+}
+
+function favoriteTasks() {
+  return state.tasks.filter((task) => Boolean(task.is_favorite));
 }
 
 function filteredTasks() {
-  return tasksMatchingStatusFilter().filter((task) => {
+  if (state.taskFilters.favoritesOnly) return favoriteTasks();
+  return tasksMatchingBaseFilters().filter((task) => {
     if (state.taskFilters.podcastTitle && task.podcast_title !== state.taskFilters.podcastTitle) {
       return false;
     }
@@ -563,8 +642,28 @@ function syncTaskPodcastFilter(tasks) {
   taskPodcastFilter.value = currentValue;
 }
 
+function syncTaskFilterControls() {
+  if (state.taskFilters.favoritesOnly) return;
+  syncTaskPodcastFilter(tasksMatchingBaseFilters());
+}
+
+function syncTimeFilterOptions() {
+  timeFilterOptions.forEach((button) => {
+    const days = Number(button.dataset.timeFilter);
+    const isSelected = state.taskFilters.timeWindowDays === days;
+    button.classList.toggle("is-active", isSelected);
+    button.setAttribute("aria-pressed", String(isSelected));
+  });
+}
+
+function syncFavoritesFilter() {
+  favoritesFilter?.classList.toggle("is-active", state.taskFilters.favoritesOnly);
+  favoritesFilter?.setAttribute("aria-pressed", String(state.taskFilters.favoritesOnly));
+}
+
 function renderTasks() {
-  renderList(taskResults, filteredTasks(), renderTask, t("noFilteredTasks"));
+  const emptyMessage = state.taskFilters.favoritesOnly ? t("noFavoriteTasks") : t("noFilteredTasks");
+  renderList(taskResults, filteredTasks(), renderTask, emptyMessage);
 }
 
 async function searchPodcasts() {
@@ -882,6 +981,26 @@ async function restartTask(taskId) {
   }
 }
 
+async function toggleTaskFavorite(task) {
+  if (state.pendingActionTaskIds.has(task.id)) return;
+  state.pendingActionTaskIds.add(task.id);
+  renderTasks();
+  try {
+    const result = await fetchJson(`/api/tasks/${task.id}/favorite`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ favorite: !Boolean(task.is_favorite) }),
+    });
+    state.tasks = state.tasks.map((item) => item.id === task.id ? result.task : item);
+    showToast(t("favoriteUpdated"), "success");
+  } catch (error) {
+    showToast(error.message, "error");
+  } finally {
+    state.pendingActionTaskIds.delete(task.id);
+    renderTasks();
+  }
+}
+
 async function generateSummarize(task) {
   setSummarizeLock(task.id, state.language);
   setTaskPending(task.id, true);
@@ -985,6 +1104,8 @@ function renderTask(task) {
   const canGenerateSummarize = task.status !== "archived" && Boolean(task.output_txt_path) && !hasLocalizedSummarize && !isSummarizeLockedForLanguage;
   const summarizeLabel = isSummarizeLockedForLanguage ? t("generatingSummarize") : hasLocalizedSummarize ? t("generated") : t("notGenerated");
   const durationClass = hasAudioDuration(task.audio_duration_seconds) ? "" : " is-missing";
+  const favoriteLabel = task.is_favorite ? t("unfavorite") : t("favorite");
+  const favoriteClass = task.is_favorite ? " is-active" : "";
 
   article.innerHTML = `
     <div class="ledger-entry__frame">
@@ -997,6 +1118,11 @@ function renderTask(task) {
       <div class="ledger-side">
         <div class="ledger-status-row">
           <span class="status ${statusTone(task)}">${formatStatus(task)}</span>
+          <button type="button" class="icon-button icon-button--favorite${favoriteClass}" data-action="favorite" title="${escapeAttribute(favoriteLabel)}" aria-label="${escapeAttribute(favoriteLabel)}" aria-pressed="${Boolean(task.is_favorite)}" ${isPending ? "disabled" : ""}>
+            <svg class="favorite-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M8 1.5l2.02 4.09 4.51.66-3.27 3.18.77 4.49L8 11.8l-4.03 2.12.77-4.49L1.47 6.25l4.51-.66L8 1.5z"></path>
+            </svg>
+          </button>
           <button type="button" class="icon-button" data-action="restart" title="${escapeAttribute(t("restart"))}" aria-label="${escapeAttribute(t("restart"))}" ${isPending ? "disabled" : ""}>↻</button>
           <button type="button" class="icon-button icon-button--danger" data-action="archive" title="${escapeAttribute(t("archive"))}" aria-label="${escapeAttribute(t("archive"))}" ${isPending ? "disabled" : ""}>×</button>
         </div>
@@ -1034,6 +1160,7 @@ function renderTask(task) {
   article.querySelector('[data-action="shownotes"]')?.addEventListener("click", () => openTaskFile(task, "shownotes"));
   article.querySelector('[data-action="summarize"]')?.addEventListener("click", () => openTaskFile(task, "summarize"));
   article.querySelector('[data-action="generate-summarize"]')?.addEventListener("click", () => generateSummarize(task));
+  article.querySelector('[data-action="favorite"]')?.addEventListener("click", () => toggleTaskFavorite(task));
   article.querySelector('[data-action="restart"]')?.addEventListener("click", () => restartTask(task.id));
   article.querySelector('[data-action="archive"]')?.addEventListener("click", () => openArchiveModal(task.id));
 
@@ -1112,7 +1239,9 @@ async function loadTasks() {
   try {
     const data = await fetchJson("/api/tasks");
     state.tasks = data.items || [];
-    syncTaskPodcastFilter(tasksMatchingStatusFilter());
+    syncTaskFilterControls();
+    syncTimeFilterOptions();
+    syncFavoritesFilter();
     renderTasks();
   } catch (error) {
     taskResults.innerHTML = `<p class="empty">${error.message}</p>`;
@@ -1126,13 +1255,33 @@ languageOptions.forEach((button) => {
     setLanguage(button.dataset.languageOption);
   });
 });
+themeOptions.forEach((button) => {
+  button.addEventListener("click", () => {
+    setTheme(button.dataset.themeOption);
+  });
+});
 taskPodcastFilter?.addEventListener("change", (event) => {
   state.taskFilters.podcastTitle = event.target.value;
   renderTasks();
 });
 taskStatusFilter?.addEventListener("change", (event) => {
   state.taskFilters.status = event.target.value;
-  syncTaskPodcastFilter(tasksMatchingStatusFilter());
+  syncTaskFilterControls();
+  renderTasks();
+});
+timeFilterOptions.forEach((button) => {
+  button.addEventListener("click", () => {
+    const days = Number(button.dataset.timeFilter);
+    state.taskFilters.timeWindowDays = state.taskFilters.timeWindowDays === days ? null : days;
+    syncTaskFilterControls();
+    syncTimeFilterOptions();
+    renderTasks();
+  });
+});
+favoritesFilter?.addEventListener("click", () => {
+  state.taskFilters.favoritesOnly = !state.taskFilters.favoritesOnly;
+  syncTaskFilterControls();
+  syncFavoritesFilter();
   renderTasks();
 });
 
@@ -1153,5 +1302,6 @@ document.querySelectorAll("[data-summary-close]")?.forEach((node) => {
 });
 
 setLanguage(state.language);
+setTheme(state.theme);
 loadTasks();
-state.tasksPoller = window.setInterval(loadTasks, 3000);
+state.tasksPoller = window.setInterval(pollTasks, 3000);

@@ -5,7 +5,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, StrictBool
 
 from backend.db import get_task, init_db, list_task_events
 from backend.podcast_search import search_podcasts
@@ -28,6 +28,7 @@ from backend.tasks import (
     migrate_shownotes_to_files,
     remove_task,
     restart_task,
+    set_task_favorite,
 )
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
@@ -36,6 +37,12 @@ FRONTEND_DIR = ROOT_DIR / "frontend"
 
 class SummarizeGenerateRequest(BaseModel):
     lang: str = "zh-CN"
+
+
+class FavoriteUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    favorite: StrictBool
 
 
 def _episode_list_item(episode: dict[str, Any]) -> dict[str, Any]:
@@ -138,6 +145,13 @@ def create_app(db_path: str | Path | None = None, executor: ThreadPoolExecutor |
             return JSONResponse(result, status_code=200)
         return result
 
+    @app.put("/api/tasks/{task_id}/favorite")
+    def task_favorite(task_id: int, payload: FavoriteUpdateRequest) -> dict[str, Any]:
+        task = set_task_favorite(task_id, payload.favorite, app.state.db_path)
+        if task is None:
+            raise HTTPException(status_code=404, detail="Task not found")
+        return {"task": task, "result": "updated"}
+
     @app.delete("/api/tasks/{task_id}")
     def task_delete(task_id: int):
         result = remove_task(task_id, app.state.db_path)
@@ -156,6 +170,9 @@ def create_app(db_path: str | Path | None = None, executor: ThreadPoolExecutor |
 
     @app.get("/")
     def index() -> FileResponse:
-        return FileResponse(FRONTEND_DIR / "index.html")
+        return FileResponse(
+            FRONTEND_DIR / "index.html",
+            headers={"Cache-Control": "no-cache"},
+        )
 
     return app

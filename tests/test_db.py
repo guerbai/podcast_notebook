@@ -1,4 +1,6 @@
-from backend.db import create_task, get_task, init_db, list_tasks
+import sqlite3
+
+from backend.db import SCHEMA, create_task, get_task, init_db, list_tasks
 
 
 def test_init_db_creates_task_storage(tmp_path):
@@ -6,6 +8,46 @@ def test_init_db_creates_task_storage(tmp_path):
     init_db(db_path)
     tasks = list_tasks(db_path)
     assert tasks == []
+
+
+def test_init_db_migrates_existing_tasks_to_unfavorited(tmp_path):
+    db_path = tmp_path / "app.db"
+    legacy_schema = SCHEMA.replace(
+        "    is_favorite INTEGER NOT NULL DEFAULT 0,\n",
+        "",
+    )
+    with sqlite3.connect(db_path) as connection:
+        connection.executescript(legacy_schema)
+        connection.execute(
+            """
+            INSERT INTO tasks (podcast_title, rss_url, episode_title, audio_url)
+            VALUES (?, ?, ?, ?)
+            """,
+            ("旧播客", "https://example.com/feed", "旧单集", "https://example.com/audio.mp3"),
+        )
+
+    init_db(db_path)
+
+    task = list_tasks(db_path)[0]
+    assert task["episode_title"] == "旧单集"
+    assert task["is_favorite"] == 0
+
+
+def test_new_tasks_default_to_unfavorited(tmp_path):
+    db_path = tmp_path / "app.db"
+    init_db(db_path)
+    task = create_task(
+        {
+            "podcast_title": "大内密谈",
+            "rss_url": "https://example.com/feed",
+            "episode_title": "新单集",
+            "audio_url": "https://example.com/audio.mp3",
+        },
+        db_path,
+    )
+
+    assert task["is_favorite"] == 0
+    assert get_task(task["id"], db_path)["is_favorite"] == 0
 
 
 def test_create_task_reuses_existing_episode_row(tmp_path):

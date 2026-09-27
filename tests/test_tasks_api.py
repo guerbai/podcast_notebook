@@ -136,6 +136,87 @@ def test_create_task_returns_existing_result_for_duplicate(tmp_path):
     assert second.json()["task"]["id"] == first.json()["task"]["id"]
 
 
+def test_favorite_endpoint_sets_clears_and_is_idempotent(tmp_path):
+    client = TestClient(create_app(db_path=tmp_path / "app.db", executor=NoopExecutor()))
+    task = client.post(
+        "/api/tasks",
+        json={
+            "podcast_title": "大内密谈",
+            "rss_url": "https://example.com/feed",
+            "episode_title": "收藏测试",
+            "audio_url": "https://example.com/audio.mp3",
+        },
+    ).json()["task"]
+
+    favorite = client.put(f"/api/tasks/{task['id']}/favorite", json={"favorite": True})
+    repeated = client.put(f"/api/tasks/{task['id']}/favorite", json={"favorite": True})
+    unfavorite = client.put(f"/api/tasks/{task['id']}/favorite", json={"favorite": False})
+
+    assert favorite.status_code == 200
+    assert favorite.json()["result"] == "updated"
+    assert favorite.json()["task"]["is_favorite"] == 1
+    assert repeated.status_code == 200
+    assert repeated.json()["task"]["is_favorite"] == 1
+    assert unfavorite.status_code == 200
+    assert unfavorite.json()["task"]["is_favorite"] == 0
+    assert client.get(f"/api/tasks/{task['id']}").json()["is_favorite"] == 0
+
+
+def test_favorite_endpoint_returns_404_for_missing_task(tmp_path):
+    client = TestClient(create_app(db_path=tmp_path / "app.db", executor=NoopExecutor()))
+
+    response = client.put("/api/tasks/999/favorite", json={"favorite": True})
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Task not found"
+
+
+def test_favorite_endpoint_rejects_non_boolean_values(tmp_path):
+    client = TestClient(create_app(db_path=tmp_path / "app.db", executor=NoopExecutor()))
+
+    response = client.put("/api/tasks/1/favorite", json={"favorite": "yes"})
+
+    assert response.status_code == 422
+
+
+def test_task_list_and_detail_include_favorite_state(tmp_path):
+    client = TestClient(create_app(db_path=tmp_path / "app.db", executor=NoopExecutor()))
+    task = client.post(
+        "/api/tasks",
+        json={
+            "podcast_title": "大内密谈",
+            "rss_url": "https://example.com/feed",
+            "episode_title": "列表收藏状态",
+            "audio_url": "https://example.com/audio.mp3",
+        },
+    ).json()["task"]
+    client.put(f"/api/tasks/{task['id']}/favorite", json={"favorite": True})
+
+    assert client.get("/api/tasks").json()["items"][0]["is_favorite"] == 1
+    assert client.get(f"/api/tasks/{task['id']}").json()["is_favorite"] == 1
+
+
+def test_archive_and_restart_preserve_favorite_state(tmp_path):
+    client = TestClient(create_app(db_path=tmp_path / "app.db", executor=NoopExecutor()))
+    task = client.post(
+        "/api/tasks",
+        json={
+            "podcast_title": "大内密谈",
+            "rss_url": "https://example.com/feed",
+            "episode_title": "收藏后归档重启",
+            "audio_url": "https://example.com/audio.mp3",
+        },
+    ).json()["task"]
+    client.put(f"/api/tasks/{task['id']}/favorite", json={"favorite": True})
+
+    archived = client.delete(f"/api/tasks/{task['id']}").json()["task"]
+    restarted = client.post(f"/api/tasks/{task['id']}/restart").json()["task"]
+
+    assert archived["is_favorite"] == 1
+    assert restarted["id"] != task["id"]
+    assert restarted["is_favorite"] == 1
+
+
 def test_existing_task_with_shownotes_does_not_refetch_shownotes(tmp_path, monkeypatch):
     import backend.tasks as task_module
 
@@ -439,7 +520,7 @@ def test_generate_summarize_endpoint_updates_task_with_model_output(tmp_path, mo
 
     monkeypatch.setenv("PODCAST_NOTEBOOK_LLM_API_KEY", "test-key")
     monkeypatch.setattr(summarizer_module, "SUMMARIES_DIR", tmp_path / "summaries")
-    monkeypatch.setattr(summarizer_module, "OpenAICompatibleSummaryClient", FakeClient)
+    monkeypatch.setattr(summarizer_module, "MessagesSummaryClient", FakeClient)
     client = TestClient(create_app(db_path=tmp_path / "app.db", executor=NoopExecutor()))
     payload = {
         "podcast_title": "大内密谈",

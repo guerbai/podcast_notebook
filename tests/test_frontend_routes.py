@@ -13,3 +13,4 @@ def test_frontend_page_is_served():
     assert 'data-role="toast-region"' in response.text
     assert 'data-role="confirm-modal"' in response.text
     assert 'data-role="summary-modal"' in response.text
+    assert response.headers["cache-control"] == "no-cache"

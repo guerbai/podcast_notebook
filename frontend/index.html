@@ -7,7 +7,10 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.2.1/dist/styles/webawesome.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.2.1/dist/styles/themes/default.css" />
     <link rel="icon" href="/static/assets/logo.svg" type="image/svg+xml" />
-    <link rel="stylesheet" href="/static/styles.css?v=20260515-audio-duration-compact" />
+    <script>
+      document.documentElement.dataset.theme = localStorage.getItem("podcast-notebook-theme") || "dark";
+    </script>
+    <link rel="stylesheet" href="/static/styles.css?v=20260831-summary-compositing" />
     <script type="module" src="https://cdn.jsdelivr.net/npm/@awesome.me/webawesome@3.2.1/dist-cdn/webawesome.loader.js"></script>
   </head>
   <body>
@@ -60,6 +63,29 @@
                 <div class="language-switch" role="group" aria-label="Language">
                   <button type="button" class="language-option" data-language-option="en" aria-pressed="true">EN</button>
                   <button type="button" class="language-option" data-language-option="zh-CN" aria-pressed="false">中文</button>
+                </div>
+              </div>
+              <div class="theme-control" aria-label="Theme:" data-i18n-aria-label="themeLabel">
+                <span data-i18n="themeLabel">Theme:</span>
+                <div class="theme-switch" role="group" aria-label="Theme">
+                  <button type="button" class="theme-option" data-theme-option="light" aria-pressed="false" aria-label="Light mode" title="Light mode" data-i18n-aria-label="themeLight" data-i18n-title="themeLight">
+                    <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <circle cx="12" cy="12" r="4"></circle>
+                      <path d="M12 2v2"></path>
+                      <path d="M12 20v2"></path>
+                      <path d="m4.93 4.93 1.41 1.41"></path>
+                      <path d="m17.66 17.66 1.41 1.41"></path>
+                      <path d="M2 12h2"></path>
+                      <path d="M20 12h2"></path>
+                      <path d="m6.34 17.66-1.41 1.41"></path>
+                      <path d="m19.07 4.93-1.41 1.41"></path>
+                    </svg>
+                  </button>
+                  <button type="button" class="theme-option" data-theme-option="dark" aria-pressed="true" aria-label="Dark mode" title="Dark mode" data-i18n-aria-label="themeDark" data-i18n-title="themeDark">
+                    <svg class="theme-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                      <path d="M20.99 12.44a8.5 8.5 0 1 1-9.43-9.43 6.5 6.5 0 0 0 9.43 9.43Z"></path>
+                    </svg>
+                  </button>
                 </div>
               </div>
               <a class="github-link" href="https://github.com/guerbai/podcast_notebook" target="_blank" rel="noreferrer" aria-label="GitHub repository">
@@ -136,10 +162,21 @@
               <wa-option value="archived" data-i18n="statusArchived">Archived</wa-option>
             </wa-select>
           </div>
+          <div class="time-filter" role="group" aria-label="Time filter" data-i18n-aria-label="timeFilterLabel">
+            <button type="button" class="time-filter__option favorites-filter" id="favorites-filter" data-action="toggle-favorites" aria-pressed="false">
+              <svg class="favorite-icon" viewBox="0 0 16 16" aria-hidden="true">
+                <path d="M8 1.5l2.02 4.09 4.51.66-3.27 3.18.77 4.49L8 11.8l-4.03 2.12.77-4.49L1.47 6.25l4.51-.66L8 1.5z"></path>
+              </svg>
+              <span data-i18n="favorites">Favorites</span>
+            </button>
+            <button type="button" class="time-filter__option" data-time-filter="3" aria-pressed="false" data-i18n="timeFilterThreeDays">Last 3 days</button>
+            <button type="button" class="time-filter__option" data-time-filter="7" aria-pressed="false" data-i18n="timeFilterWeek">Last week</button>
+            <button type="button" class="time-filter__option" data-time-filter="30" aria-pressed="false" data-i18n="timeFilterMonth">Last month</button>
+          </div>
           <div id="task-results" class="task-results"></div>
         </section>
       </div>
     </main>
-    <script type="module" src="/static/app.js?v=20260515-audio-duration-compact"></script>
+    <script type="module" src="/static/app.js?v=20260830-summary-modal-poll"></script>
   </body>
 </html>

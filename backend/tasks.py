@@ -151,6 +151,16 @@ def list_task_details(db_path: str | Path) -> list[dict[str, Any]]:
     return list_tasks(db_path)
 
 
+def set_task_favorite(
+    task_id: int,
+    favorite: bool,
+    db_path: str | Path,
+) -> dict[str, Any] | None:
+    if get_task(task_id, db_path) is None:
+        return None
+    return update_task(task_id, {"is_favorite": int(favorite)}, db_path)
+
+
 def _backfill_audio_duration(task: dict[str, Any], db_path: str | Path) -> dict[str, Any]:
     if task.get("audio_duration_seconds") is not None:
         return task
@@ -215,6 +225,7 @@ def restart_task(task_id: int, db_path: str | Path, executor: Executor) -> dict[
     if task is None:
         return None
 
+    is_favorite = bool(task.get("is_favorite"))
     shownotes = _read_shownotes_reference(task.get("shownotes", ""))
     payload = {
         "podcast_title": task["podcast_title"],
@@ -229,6 +240,8 @@ def restart_task(task_id: int, db_path: str | Path, executor: Executor) -> dict[
     delete_task(task_id, db_path)
     payload = _ensure_shownotes(payload)
     task = create_task(payload, db_path)
+    if is_favorite:
+        task = update_task(task["id"], {"is_favorite": 1}, db_path)
     add_task_event(task["id"], f"Task restarted from {task_id}", db_path=db_path)
     executor.submit(run_task, task["id"], db_path, executor)
     return {

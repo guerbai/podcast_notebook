@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     transcription_percent REAL NOT NULL DEFAULT 0,
     cancel_requested INTEGER NOT NULL DEFAULT 0,
     pending_action TEXT NOT NULL DEFAULT '',
+    is_favorite INTEGER NOT NULL DEFAULT 0,
     audio_file_path TEXT,
     output_txt_path TEXT,
     summary_md_path TEXT,
@@ -48,6 +49,7 @@ CREATE TABLE IF NOT EXISTS task_events (
 
 
 TASK_MIGRATIONS = {
+    "is_favorite": "ALTER TABLE tasks ADD COLUMN is_favorite INTEGER NOT NULL DEFAULT 0",
     "download_percent": "ALTER TABLE tasks ADD COLUMN download_percent REAL NOT NULL DEFAULT 0",
     "transcription_percent": "ALTER TABLE tasks ADD COLUMN transcription_percent REAL NOT NULL DEFAULT 0",
     "cancel_requested": "ALTER TABLE tasks ADD COLUMN cancel_requested INTEGER NOT NULL DEFAULT 0",
