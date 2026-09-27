@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import json
 import os
 import re
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Protocol
 
-import httpx
 from opencc import OpenCC
 
 from backend.config import ROOT_DIR, SUMMARIES_DIR, load_project_config
@@ -46,50 +48,177 @@ class SummaryClient(Protocol):
 @dataclass(slots=True)
 class SummaryConfig:
     api_key: str
-    base_url: str = "https://api.openai.com/v1"
-    model: str = "gpt-4o-mini"
-    timeout_seconds: float = 60.0
+    base_url: str = "http://MacBook-Work.local:15723"
+    timeout_seconds: float = 600.0
 
 
-class OpenAICompatibleSummaryClient:
+MESSAGES_MODEL = "kimi-k3"
+MESSAGES_MAX_TOKENS = 32768
+MESSAGES_EFFORT = "high"
+ANTHROPIC_VERSION = "2023-06-01"
+SUMMARY_SYSTEM_PROMPT = (
+    "You write detailed, accurate, source-grounded podcast episode summaries in Markdown. "
+    "Use only one H1 title and H2 section headings; never use H3 or deeper headings. "
+    "Return only the final summary Markdown; never include operational notes, file paths, "
+    "database updates, API verification, or chatty completion text."
+)
+
+
+class MessagesSummaryClient:
     def __init__(self, config: SummaryConfig) -> None:
         self.config = config
 
     def generate(self, prompt: str, language: str) -> str:
         try:
-            response = httpx.post(
-                f"{self.config.base_url.rstrip('/')}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self.config.api_key}",
-                    "Content-Type": "application/json",
+            payload = _request_messages(
+                self.config,
+                {
+                    "model": MESSAGES_MODEL,
+                    "max_tokens": MESSAGES_MAX_TOKENS,
+                    "output_config": {"effort": MESSAGES_EFFORT},
+                    "system": SUMMARY_SYSTEM_PROMPT,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "stream": True,
                 },
-                json={
-                    "model": self.config.model,
-                    "messages": [
-                        {
-                            "role": "system",
-                            "content": (
-                                "You write detailed, accurate, source-grounded podcast episode summaries in Markdown. "
-                                "Use only one H1 title and H2 section headings; never use H3 or deeper headings. "
-                                "Return only the final summary Markdown; never include operational notes, file paths, "
-                                "database updates, API verification, or chatty completion text."
-                            ),
-                        },
-                        {"role": "user", "content": prompt},
-                    ],
-                    "temperature": 0.2,
-                },
-                timeout=self.config.timeout_seconds,
             )
-            response.raise_for_status()
-            payload = response.json()
-            content = payload["choices"][0]["message"]["content"]
+            blocks = payload["content"]
+            content = "\n\n".join(
+                block["text"].strip()
+                for block in blocks
+                if block.get("type") == "text"
+                and isinstance(block.get("text"), str)
+                and block["text"].strip()
+            )
+        except SummaryProviderError:
+            raise
         except Exception as exc:
-            raise SummaryProviderError("Summarize provider request failed") from exc
+            raise SummaryProviderError(_provider_error_message(exc)) from exc
 
         if not isinstance(content, str) or not content.strip():
             raise SummaryProviderError("Summarize provider returned empty content")
         return content.strip()
+
+
+def _provider_error_message(error: Exception) -> str:
+    return f"Summarize provider request failed: {type(error).__name__}: {error}"
+
+
+def _request_messages(config: SummaryConfig, payload: dict) -> dict:
+    _verify_proxy_health(config.base_url)
+    messages_url = f"{config.base_url.rstrip('/')}/v1/messages"
+    header_input = "\n".join(
+        [
+            f"x-api-key: {config.api_key}",
+            f"anthropic-version: {ANTHROPIC_VERSION}",
+            "content-type: application/json",
+            "",
+        ]
+    )
+    with NamedTemporaryFile(mode="w", encoding="utf-8", suffix=".json") as request_file:
+        json.dump(payload, request_file, ensure_ascii=False)
+        request_file.flush()
+        result = subprocess.run(
+            [
+                "curl",
+                "-sS",
+                "-4",
+                "--noproxy",
+                "*",
+                "--max-time",
+                f"{config.timeout_seconds:g}",
+                "--header",
+                "@-",
+                "--data-binary",
+                f"@{request_file.name}",
+                "--write-out",
+                "\n%{http_code}",
+                messages_url,
+            ],
+            input=header_input,
+            capture_output=True,
+            text=True,
+            timeout=config.timeout_seconds + 5,
+            check=False,
+        )
+    response_body, status_code = _parse_curl_response(result, "Messages request")
+    if not 200 <= status_code < 300:
+        response_text = response_body.strip() or "<empty response>"
+        raise SummaryProviderError(
+            f"Summarize provider request failed: HTTP {status_code}: {response_text[:500]}"
+        )
+    return _parse_messages_response(response_body)
+
+
+def _parse_messages_response(response_body: str) -> dict:
+    if response_body.lstrip().startswith("{"):
+        return json.loads(response_body)
+
+    text_parts = []
+    message_stopped = False
+    for line in response_body.splitlines():
+        if not line.startswith("data:"):
+            continue
+        event = json.loads(line.removeprefix("data:").strip())
+        event_type = event.get("type")
+        if event_type == "content_block_start":
+            block = event.get("content_block", {})
+            if block.get("type") == "text" and isinstance(block.get("text"), str):
+                text_parts.append(block["text"])
+        elif event_type == "content_block_delta":
+            delta = event.get("delta", {})
+            if delta.get("type") == "text_delta" and isinstance(delta.get("text"), str):
+                text_parts.append(delta["text"])
+        elif event_type == "error":
+            error = event.get("error", {})
+            message = error.get("message") or "unknown streaming error"
+            raise SummaryProviderError(f"Summarize provider stream failed: {message}")
+        elif event_type == "message_stop":
+            message_stopped = True
+
+    if not message_stopped:
+        raise SummaryProviderError("Summarize provider stream ended before message_stop")
+    return {"content": [{"type": "text", "text": "".join(text_parts)}]}
+
+
+def _verify_proxy_health(base_url: str) -> None:
+    result = subprocess.run(
+        [
+            "curl",
+            "-sS",
+            "-4",
+            "--noproxy",
+            "*",
+            "--max-time",
+            "3",
+            "--write-out",
+            "\n%{http_code}",
+            f"{base_url.rstrip('/')}/health",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=False,
+    )
+    health_body, status_code = _parse_curl_response(result, "Health check")
+    health_payload = json.loads(health_body)
+    if status_code != 200 or health_payload.get("ok") is not True:
+        raise SummaryProviderError("Summarize proxy health check failed")
+
+
+def _parse_curl_response(
+    result: subprocess.CompletedProcess[str], operation: str
+) -> tuple[str, int]:
+    if result.returncode != 0:
+        error_text = result.stderr.strip() or "<empty stderr>"
+        raise SummaryProviderError(
+            f"Summarize provider request failed: {operation} curl exit {result.returncode}: {error_text[:500]}"
+        )
+    parts = result.stdout.rsplit("\n", 1)
+    if len(parts) != 2 or not parts[1].isdigit():
+        raise SummaryProviderError(
+            f"Summarize provider request failed: {operation} returned malformed output"
+        )
+    return parts[0], int(parts[1])
 
 
 _TRADITIONAL_TO_SIMPLIFIED = OpenCC("t2s")
@@ -97,22 +226,13 @@ _TRADITIONAL_TO_SIMPLIFIED = OpenCC("t2s")
 
 def summary_config_from_env() -> SummaryConfig:
     project_config = load_project_config()
-    if project_config.llm.api_key:
-        return SummaryConfig(
-            api_key=project_config.llm.api_key,
-            base_url=project_config.llm.base_url,
-            model=project_config.llm.model,
-            timeout_seconds=project_config.llm.timeout_seconds,
-        )
-
     api_key = os.environ.get("PODCAST_NOTEBOOK_LLM_API_KEY", "").strip()
     if not api_key:
         raise SummaryNotConfiguredError("Summarize API key is not configured")
     return SummaryConfig(
         api_key=api_key,
-        base_url=os.environ.get("PODCAST_NOTEBOOK_LLM_BASE_URL", "https://api.openai.com/v1"),
-        model=os.environ.get("PODCAST_NOTEBOOK_LLM_MODEL", "gpt-4o-mini"),
-        timeout_seconds=float(os.environ.get("PODCAST_NOTEBOOK_LLM_TIMEOUT", "60")),
+        base_url=project_config.llm.base_url,
+        timeout_seconds=project_config.llm.timeout_seconds,
     )
 
 
@@ -136,7 +256,7 @@ def generate_task_summarize(
     if not transcript_path.is_file():
         raise SummaryTranscriptMissingError("Transcript file is missing")
 
-    summary_client = client or OpenAICompatibleSummaryClient(summary_config_from_env())
+    summary_client = client or MessagesSummaryClient(summary_config_from_env())
     transcript = transcript_path.read_text(encoding="utf-8")
     shownotes = _read_optional_file(task.get("shownotes", ""))
     prompt = build_summary_prompt(task, transcript, shownotes, language)
@@ -146,8 +266,14 @@ def generate_task_summarize(
         markdown = summary_client.generate(prompt, language)
         markdown = _normalize_summary_language(markdown, language)
         output_path = _write_summary_file(task, markdown, language, Path(summaries_dir or SUMMARIES_DIR))
-    except Exception:
-        add_task_event(task_id, f"Summarize failed for {language}", level="error", db_path=db_path)
+    except Exception as exc:
+        failure_message = f"{type(exc).__name__}: {exc}"
+        add_task_event(
+            task_id,
+            f"Summarize failed for {language}: {failure_message}"[:1000],
+            level="error",
+            db_path=db_path,
+        )
         raise
 
     updated = update_task(task_id, {field: str(output_path)}, db_path)

@@ -19,9 +19,8 @@ SUMMARIES_DIR = DATA_DIR / "summaries"
 SHOWNOTES_DIR = DATA_DIR / "shownotes"
 MODELS_DIR = DATA_DIR / "models"
 DB_PATH = DB_DIR / "podcast_notebook.db"
-DEFAULT_LLM_BASE_URL = "https://api.openai.com/v1"
-DEFAULT_LLM_MODEL = "gpt-4o-mini"
-DEFAULT_LLM_TIMEOUT_SECONDS = 60.0
+DEFAULT_LLM_BASE_URL = "http://MacBook-Work.local:15723"
+DEFAULT_LLM_TIMEOUT_SECONDS = 600.0
 
 
 class ConfigError(RuntimeError):
@@ -30,9 +29,7 @@ class ConfigError(RuntimeError):
 
 @dataclass(slots=True)
 class LLMConfig:
-    api_key: str = ""
     base_url: str = DEFAULT_LLM_BASE_URL
-    model: str = DEFAULT_LLM_MODEL
     timeout_seconds: float = DEFAULT_LLM_TIMEOUT_SECONDS
 
 
@@ -79,9 +76,7 @@ def _load_llm_config(value: Any) -> LLMConfig:
     if not isinstance(value, dict):
         raise ConfigError("llm config must be a mapping")
     return LLMConfig(
-        api_key=str(value.get("api_key", "") or "").strip(),
         base_url=str(value.get("base_url", DEFAULT_LLM_BASE_URL) or DEFAULT_LLM_BASE_URL).strip(),
-        model=str(value.get("model", DEFAULT_LLM_MODEL) or DEFAULT_LLM_MODEL).strip(),
         timeout_seconds=float(value.get("timeout_seconds", DEFAULT_LLM_TIMEOUT_SECONDS)),
     )
 

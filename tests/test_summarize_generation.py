@@ -1,10 +1,13 @@
+import json
 from pathlib import Path
+from subprocess import CompletedProcess
 
 from backend.db import create_task, init_db, list_task_events, update_task
 from backend.summarizer import (
-    OpenAICompatibleSummaryClient,
+    MessagesSummaryClient,
     SummaryAlreadyExistsError,
     SummaryConfig,
+    SummaryProviderError,
     build_summary_prompt,
     generate_task_summarize,
 )
@@ -21,6 +24,13 @@ class FakeSummaryClient:
         self.prompt = prompt
         self.language = language
         return self.markdown
+
+
+class FailingSummaryClient:
+    def generate(self, prompt: str, language: str) -> str:
+        raise SummaryProviderError(
+            "Summarize provider request failed: Messages request curl exit 28: operation timed out"
+        )
 
 
 def _create_completed_task(tmp_path: Path):
@@ -78,6 +88,33 @@ def test_generate_task_summarize_writes_chinese_file_and_updates_task(tmp_path):
     events = [event["message"] for event in list_task_events(task["id"], db_path)]
     assert "Generating summarize for zh-CN" in events
     assert "Summarize generated for zh-CN" in events
+
+
+def test_generate_task_summarize_records_provider_failure_reason(tmp_path):
+    db_path, task = _create_completed_task(tmp_path)
+
+    try:
+        generate_task_summarize(
+            task["id"],
+            "zh-CN",
+            db_path,
+            client=FailingSummaryClient(),
+            summaries_dir=tmp_path / "summaries",
+        )
+    except SummaryProviderError:
+        pass
+    else:
+        raise AssertionError("expected provider failure")
+
+    error_events = [
+        event
+        for event in list_task_events(task["id"], db_path)
+        if event["level"] == "error"
+    ]
+    assert error_events[-1]["message"] == (
+        "Summarize failed for zh-CN: SummaryProviderError: "
+        "Summarize provider request failed: Messages request curl exit 28: operation timed out"
+    )
 
 
 def test_generate_task_summarize_converts_chinese_summary_to_simplified(tmp_path):
@@ -271,31 +308,129 @@ def test_english_summary_prompt_requires_english_section_headings():
     assert "Core Thesis / Market Variables / Asset or Industry Views / Actionable Takeaways / Conclusion and Implications" in prompt
 
 
-def test_openai_client_system_prompt_asks_for_detailed_summary_without_operational_text(monkeypatch):
+def test_messages_request_contract(monkeypatch):
     captured = {}
-
-    class FakeResponse:
-        def raise_for_status(self):
-            return None
-
-        def json(self):
-            return {"choices": [{"message": {"content": "# 总结\n\n内容"}}]}
-
-    def fake_post(*args, **kwargs):
-        captured.update(kwargs)
-        return FakeResponse()
-
-    monkeypatch.setattr("backend.summarizer.httpx.post", fake_post)
-    client = OpenAICompatibleSummaryClient(SummaryConfig(api_key="test-key"))
+    _mock_curl_requests(
+        monkeypatch,
+        captured,
+        {"content": [{"type": "text", "text": "# 总结\n\n内容"}]},
+    )
+    client = MessagesSummaryClient(
+        SummaryConfig(api_key="test-key", base_url="http://MacBook-Work.local:15723")
+    )
 
     assert client.generate("prompt", "zh-CN") == "# 总结\n\n内容"
-    system_prompt = captured["json"]["messages"][0]["content"]
+    assert captured["health_command"][-1] == "http://MacBook-Work.local:15723/health"
+    assert captured["messages_command"][-1] == "http://MacBook-Work.local:15723/v1/messages"
+    assert "-4" in captured["health_command"]
+    assert "-4" in captured["messages_command"]
+    assert "test-key" not in " ".join(captured["messages_command"])
+    assert "x-api-key: test-key" in captured["headers_input"]
+    assert "anthropic-version: 2023-06-01" in captured["headers_input"]
+    assert captured["json"]["model"] == "kimi-k3"
+    assert captured["json"]["max_tokens"] == 32768
+    assert captured["json"]["output_config"] == {"effort": "high"}
+    assert captured["json"]["stream"] is True
+    assert captured["json"]["messages"] == [{"role": "user", "content": "prompt"}]
+    system_prompt = captured["json"]["system"]
     assert "detailed" in system_prompt
     assert "never include operational notes" in system_prompt
     assert "concise" not in system_prompt
 
 
-def test_summary_config_prefers_yaml_config_over_env(tmp_path, monkeypatch):
+def test_messages_client_joins_text_content_blocks(monkeypatch):
+    _mock_curl_requests(
+        monkeypatch,
+        {},
+        {
+            "content": [
+                {"type": "text", "text": "第一段"},
+                {"type": "tool_use", "id": "tool-1", "name": "ignored"},
+                {"type": "text", "text": " 第二段 "},
+            ]
+        },
+    )
+    client = MessagesSummaryClient(
+        SummaryConfig(api_key="test-key", base_url="http://MacBook-Work.local:15723")
+    )
+
+    assert client.generate("prompt", "zh-CN") == "第一段\n\n第二段"
+
+
+def test_messages_client_collects_text_from_streaming_sse(monkeypatch):
+    def fake_run(command, **kwargs):
+        if command[-1].endswith("/health"):
+            return CompletedProcess(command, 0, stdout='{"ok":true}\n200', stderr="")
+
+        stream = "\n".join(
+            [
+                "event: message_start",
+                'data: {"type":"message_start","message":{"content":[]}}',
+                "",
+                "event: content_block_delta",
+                'data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"分析"}}',
+                "",
+                "event: content_block_delta",
+                'data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"第一段"}}',
+                "",
+                "event: content_block_delta",
+                'data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"第二段"}}',
+                "",
+                "event: message_stop",
+                'data: {"type":"message_stop"}',
+                "",
+                "200",
+            ]
+        )
+        return CompletedProcess(command, 0, stdout=stream, stderr="")
+
+    monkeypatch.setattr("backend.summarizer.subprocess.run", fake_run)
+    client = MessagesSummaryClient(
+        SummaryConfig(api_key="test-key", base_url="http://MacBook-Work.local:15723")
+    )
+
+    assert client.generate("prompt", "zh-CN") == "第一段第二段"
+
+
+def test_messages_client_reports_provider_status_without_request_headers(monkeypatch):
+    _mock_curl_requests(
+        monkeypatch,
+        {},
+        {"error": {"message": "upstream unavailable"}},
+        status_code=502,
+    )
+    client = MessagesSummaryClient(
+        SummaryConfig(api_key="secret-key", base_url="http://MacBook-Work.local:15723")
+    )
+
+    try:
+        client.generate("prompt", "zh-CN")
+    except SummaryProviderError as error:
+        assert str(error) == (
+            'Summarize provider request failed: HTTP 502: {"error": {"message": "upstream unavailable"}}'
+        )
+        assert "secret-key" not in str(error)
+    else:
+        raise AssertionError("expected provider error")
+
+
+def _mock_curl_requests(monkeypatch, captured, response_payload, status_code=200):
+    def fake_run(command, **kwargs):
+        if command[-1].endswith("/health"):
+            captured["health_command"] = command
+            return CompletedProcess(command, 0, stdout='{"ok":true}\n200', stderr="")
+
+        captured["messages_command"] = command
+        captured["headers_input"] = kwargs["input"]
+        body_argument = command[command.index("--data-binary") + 1]
+        captured["json"] = json.loads(Path(body_argument.removeprefix("@")).read_text(encoding="utf-8"))
+        response_body = json.dumps(response_payload, ensure_ascii=False)
+        return CompletedProcess(command, 0, stdout=f"{response_body}\n{status_code}", stderr="")
+
+    monkeypatch.setattr("backend.summarizer.subprocess.run", fake_run)
+
+
+def test_summary_config_uses_environment_key_and_yaml_connection_settings(tmp_path, monkeypatch):
     from backend.summarizer import summary_config_from_env
 
     config_path = tmp_path / "podcast_notebook.yaml"
@@ -303,8 +438,7 @@ def test_summary_config_prefers_yaml_config_over_env(tmp_path, monkeypatch):
         """
 llm:
   api_key: yaml-key
-  base_url: https://yaml.example.com/v1
-  model: yaml-model
+  base_url: http://proxy.local:15723
   timeout_seconds: 9
 """.strip(),
         encoding="utf-8",
@@ -315,7 +449,17 @@ llm:
 
     config = summary_config_from_env()
 
-    assert config.api_key == "yaml-key"
-    assert config.base_url == "https://yaml.example.com/v1"
-    assert config.model == "yaml-model"
+    assert config.api_key == "env-key"
+    assert config.base_url == "http://proxy.local:15723"
     assert config.timeout_seconds == 9
+
+
+def test_summary_config_default_allows_slow_max_effort_generation(tmp_path, monkeypatch):
+    from backend.summarizer import summary_config_from_env
+
+    monkeypatch.setenv("PODCAST_NOTEBOOK_LLM_API_KEY", "env-key")
+    monkeypatch.setenv("PODCAST_NOTEBOOK_CONFIG", str(tmp_path / "missing.yaml"))
+
+    config = summary_config_from_env()
+
+    assert config.timeout_seconds == 600

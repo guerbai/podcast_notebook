@@ -12,9 +12,7 @@ def test_load_project_config_reads_yaml_llm_and_podcast_names(tmp_path):
     config_path.write_text(
         """
 llm:
-  api_key: test-key
-  base_url: https://llm.example.com/v1
-  model: test-model
+  base_url: http://proxy.local:15723
   timeout_seconds: 12
 
 subscriptions:
@@ -27,9 +25,7 @@ subscriptions:
 
     config = load_project_config(config_path)
 
-    assert config.llm.api_key == "test-key"
-    assert config.llm.base_url == "https://llm.example.com/v1"
-    assert config.llm.model == "test-model"
+    assert config.llm.base_url == "http://proxy.local:15723"
     assert config.llm.timeout_seconds == 12
     assert config.subscriptions.podcasts == ["商业就是这样", "半拿铁 | 商业沉浮录"]
 

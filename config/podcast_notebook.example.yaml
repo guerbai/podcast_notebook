@@ -1,8 +1,6 @@
 llm:
-  api_key: ""
-  base_url: "https://api.openai.com/v1"
-  model: "gpt-4o-mini"
-  timeout_seconds: 60
+  base_url: "http://MacBook-Work.local:15723"
+  timeout_seconds: 600
 
 subscriptions:
   podcasts:
