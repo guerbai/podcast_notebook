@@ -13,6 +13,8 @@ list.md
 
 # Local private configuration
 config/podcast_notebook.yaml
+config/com.podcast-notebook.web.plist
+scripts/start_server.sh
 
 # Local runtime outputs
 data/db/
