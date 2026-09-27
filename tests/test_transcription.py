@@ -47,3 +47,40 @@ def test_load_model_clears_broken_snapshot_and_uses_repo_local_hf_cache(tmp_path
     assert os.environ["HUGGINGFACE_HUB_CACHE"] == str(tmp_path / "hf-home" / "hub")
     assert os.environ["HF_HUB_DISABLE_XET"] == "1"
     assert not repo_dir.exists()
+
+
+def test_load_model_initializes_faster_whisper_disabled_tqdm_lock(tmp_path, monkeypatch):
+    calls: dict[str, object] = {}
+
+    class FakeDisabledTqdm:
+        lock_calls = 0
+
+        @classmethod
+        def get_lock(cls):
+            cls.lock_calls += 1
+            cls._lock = object()
+            return cls._lock
+
+    class FakeWhisperModel:
+        def __init__(self, *args, **kwargs):
+            calls["args"] = args
+            calls["kwargs"] = kwargs
+
+    fake_faster_whisper = types.SimpleNamespace(
+        WhisperModel=FakeWhisperModel,
+        utils=types.SimpleNamespace(disabled_tqdm=FakeDisabledTqdm),
+    )
+
+    monkeypatch.setattr(transcription, "MODELS_DIR", tmp_path)
+    transcription._MODEL_CACHE.clear()
+    monkeypatch.setitem(sys.modules, "faster_whisper", fake_faster_whisper)
+    monkeypatch.delenv("HF_HOME", raising=False)
+    monkeypatch.delenv("HUGGINGFACE_HUB_CACHE", raising=False)
+    monkeypatch.delenv("HF_HUB_DISABLE_XET", raising=False)
+
+    model = transcription._load_model("base")
+
+    assert isinstance(model, FakeWhisperModel)
+    assert calls["args"] == ("base",)
+    assert FakeDisabledTqdm.lock_calls == 1
+    assert hasattr(FakeDisabledTqdm, "_lock")

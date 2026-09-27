@@ -38,15 +38,16 @@ def test_download_audio_prefers_curl_when_available(monkeypatch, tmp_path):
     assert calls[0][0] == "curl"
 
 
-def test_download_audio_retries_lizhi_https_url_as_http(monkeypatch, tmp_path):
+def test_download_audio_retries_lizhi_url_on_numbered_cdn_fallback(monkeypatch, tmp_path):
     destination = tmp_path / "episode.mp3"
     calls = []
+    success_url = "https://cdn5.lizhi.fm/audio/2026/04/09/example.mp3"
 
     monkeypatch.setattr(downloads.shutil, "which", lambda name: "/usr/bin/curl" if name == "curl" else None)
 
     def fake_curl(audio_url, destination, progress_callback=None):
         calls.append(audio_url)
-        if audio_url.startswith("https://cdn.lizhi.fm/"):
+        if audio_url != success_url:
             raise subprocess.CalledProcessError(56, ["curl", audio_url])
         destination.write_bytes(b"ok")
         if progress_callback:
@@ -60,6 +61,15 @@ def test_download_audio_retries_lizhi_https_url_as_http(monkeypatch, tmp_path):
     assert result == destination
     assert calls == [
         "https://cdn.lizhi.fm/audio/2026/04/09/example.mp3",
+        success_url,
+    ]
+
+
+def test_download_url_candidates_adds_lizhi_numbered_cdn_fallbacks():
+    assert downloads._download_url_candidates("https://cdn.lizhi.fm/audio/2026/04/09/example.mp3") == [
+        "https://cdn.lizhi.fm/audio/2026/04/09/example.mp3",
+        "https://cdn5.lizhi.fm/audio/2026/04/09/example.mp3",
+        "http://cdn5.lizhi.fm/audio/2026/04/09/example.mp3",
         "http://cdn.lizhi.fm/audio/2026/04/09/example.mp3",
     ]
 

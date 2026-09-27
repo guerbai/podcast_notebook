@@ -4,13 +4,15 @@ from pathlib import Path
 import shutil
 import subprocess
 import time
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse, urlunparse
 
 import httpx
 
 
 CURL_MAX_ATTEMPTS = 6
 CURL_RETRY_DELAY_SECONDS = 2
+LIZHI_RSS_CDN_HOST = "cdn.lizhi.fm"
+LIZHI_DOWNLOAD_CDN_HOST = "cdn5.lizhi.fm"
 
 
 def build_download_record(audio_url: str, destination: str | Path) -> dict[str, str | int]:
@@ -202,6 +204,28 @@ def download_audio(
 
 def _download_url_candidates(audio_url: str) -> list[str]:
     parsed = urlparse(audio_url)
-    if parsed.scheme == "https" and parsed.netloc == "cdn.lizhi.fm":
-        return [audio_url, audio_url.replace("https://", "http://", 1)]
+    if parsed.scheme in {"http", "https"} and parsed.netloc == LIZHI_RSS_CDN_HOST:
+        return _lizhi_download_url_candidates(parsed)
     return [audio_url]
+
+
+def _lizhi_download_url_candidates(parsed: ParseResult) -> list[str]:
+    return _unique_urls(
+        [
+            urlunparse(parsed),
+            urlunparse(parsed._replace(netloc=LIZHI_DOWNLOAD_CDN_HOST)),
+            urlunparse(parsed._replace(scheme="http", netloc=LIZHI_DOWNLOAD_CDN_HOST)),
+            urlunparse(parsed._replace(scheme="http")),
+        ]
+    )
+
+
+def _unique_urls(urls: list[str]) -> list[str]:
+    candidates = []
+    seen = set()
+    for url in urls:
+        if url in seen:
+            continue
+        candidates.append(url)
+        seen.add(url)
+    return candidates

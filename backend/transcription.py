@@ -69,9 +69,25 @@ def _clear_broken_snapshot(model_size: str) -> None:
         shutil.rmtree(repo_dir)
 
 
+def _ensure_faster_whisper_disabled_tqdm_lock() -> None:
+    try:
+        from faster_whisper import utils as faster_whisper_utils
+    except (AttributeError, ImportError):
+        return
+
+    disabled_tqdm = getattr(faster_whisper_utils, "disabled_tqdm", None)
+    if disabled_tqdm is None or hasattr(disabled_tqdm, "_lock"):
+        return
+
+    get_lock = getattr(disabled_tqdm, "get_lock", None)
+    if callable(get_lock):
+        get_lock()
+
+
 def _load_model(model_size: str):
     from faster_whisper import WhisperModel
 
+    _ensure_faster_whisper_disabled_tqdm_lock()
     if model_size not in _MODEL_CACHE:
         MODELS_DIR.mkdir(parents=True, exist_ok=True)
         _configure_hf_environment()
