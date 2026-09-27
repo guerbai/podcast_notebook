@@ -63,7 +63,7 @@ def test_frontend_exposes_language_toggle_and_i18n_dictionaries():
     assert "播客笔记本" in script
     assert "Podcast Notebook" in script
     assert "/static/app.js?v=20260830-summary-modal-poll" in html
-    assert "/static/styles.css?v=20260927-impeccable-ui" in html
+    assert "/static/styles.css?v=20260927-impeccable-workbench" in html
 
 
 def test_frontend_chinese_copy_omits_sentence_periods():

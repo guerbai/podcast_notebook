@@ -1120,32 +1120,146 @@ wa-select {
   text-underline-offset: 2px;
 }
 
-@media (max-width: 1120px) {
+@media (min-width: 761px) {
+  .page {
+    padding-top: 20px;
+  }
+
   .masthead {
-    grid-template-columns: 1fr;
-    gap: 14px;
+    margin-bottom: 20px;
+    padding: 16px 24px;
   }
 
-  .masthead-controls {
-    padding-top: 12px;
-    border-top: 1px solid var(--line);
+  .brand-logo {
+    width: 48px;
   }
 
-  .top-controls {
-    justify-content: flex-start;
-    flex-wrap: wrap;
+  .masthead h1 {
+    font-size: 2.45rem;
   }
 
   .workspace-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: clamp(300px, 25vw, 340px) minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .workflow-stack,
+  .archive-sheet {
+    background: var(--paper-strong);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
   }
 
   .workflow-stack {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0;
+  }
+
+  .workflow-stack .sheet {
+    padding: 22px;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+  }
+
+  .workflow-stack .sheet + .sheet {
+    border-top: 1px solid var(--line);
+  }
+
+  .archive-sheet {
+    padding: 22px 26px;
+  }
+
+  .section-heading-wide {
+    margin-bottom: 14px;
+  }
+
+  .task-results {
+    gap: 0;
+  }
+
+  .ledger-entry {
+    grid-template-columns: minmax(0, 1fr) minmax(180px, 220px);
+    gap: 6px 20px;
+    padding: 14px 0;
+    background: transparent;
+    border: 0;
+    border-top: 1px solid var(--line);
+    border-radius: 0;
+  }
+
+  .ledger-entry__frame,
+  .ledger-detail-panel {
+    grid-column: 1 / -1;
+  }
+
+  .ledger-title-group {
+    gap: 4px;
+  }
+
+  .ledger-title-group strong {
+    font-size: 1.1rem;
+    line-height: 1.32;
+  }
+
+  .ledger-meta {
+    grid-column: 1;
+  }
+
+  .ledger-progress {
+    grid-column: 2;
+    grid-row: 2 / span 2;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .task-progress {
+    gap: 3px;
+  }
+
+  .ledger-actions {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .ledger-actions .ghost-button {
+    padding: 6px 9px;
+    font-size: 0.84rem;
+  }
+
+  :root[data-theme="dark"] .workflow-stack,
+  :root[data-theme="dark"] .archive-sheet {
+    background: var(--paper-strong);
+    border-color: var(--line);
+  }
+
+  :root[data-theme="dark"] .workflow-stack .sheet,
+  :root[data-theme="dark"] .archive-sheet .ledger-entry {
+    background: transparent;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 999px) {
+  .workspace-grid {
+    grid-template-columns: 190px minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .workflow-stack .sheet,
+  .archive-sheet {
+    padding: 16px;
+  }
+
+  .ledger-entry {
+    grid-template-columns: minmax(0, 1fr) 140px;
+    column-gap: 10px;
   }
 }
 
 @media (max-width: 760px) {
+  .workspace-grid {
+    grid-template-columns: 1fr;
+  }
+
   .page {
     width: min(100% - 28px, 1440px);
     padding-top: 14px;
