@@ -1075,6 +1075,21 @@ wa-select {
   margin-top: 18px;
 }
 
+.summary-detail {
+  margin-top: 24px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  padding: 18px 0 0;
+  background: transparent;
+}
+
+.summary-detail > summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-weight: 600;
+}
+
 .summary-render {
   overflow: auto;
   min-height: 0;

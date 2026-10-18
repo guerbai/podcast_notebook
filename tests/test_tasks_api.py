@@ -1,6 +1,7 @@
 from concurrent.futures import Executor, Future
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import create_app
@@ -417,6 +418,15 @@ def test_task_summarize_endpoint_returns_file_content(tmp_path):
     assert response.status_code == 200
     assert response.json()["content"].startswith("# 总结")
     assert response.json()["path"] == str(summarize_path)
+    assert "brief_content" not in response.json()
+
+    brief_path = tmp_path / "brief.md"
+    brief_path.write_text("短版观点。", encoding="utf-8")
+    update_task(task["id"], {"summarize_brief": str(brief_path)}, tmp_path / "app.db")
+    with_brief = client.get(f"/api/tasks/{task['id']}/summarize").json()
+    assert with_brief["brief_content"] == "短版观点。"
+    assert with_brief["content"] == response.json()["content"]
+    assert with_brief["path"] == response.json()["path"]
 
 
 def test_task_summarize_endpoint_returns_english_content_when_requested(tmp_path):
@@ -440,6 +450,7 @@ def test_task_summarize_endpoint_returns_english_content_when_requested(tmp_path
         {
             "summarize": str(zh_path),
             "summarize_en": str(en_path),
+            "summarize_brief": str(zh_path),
         },
         tmp_path / "app.db",
     )
@@ -448,6 +459,7 @@ def test_task_summarize_endpoint_returns_english_content_when_requested(tmp_path
 
     assert response.status_code == 200
     assert response.json()["title"] == "Summary"
+    assert "brief_content" not in response.json()
     assert response.json()["content"].startswith("# Summary")
     assert response.json()["path"] == str(en_path)
 
@@ -500,7 +512,7 @@ def test_generate_summarize_endpoint_returns_503_without_api_key(tmp_path, monke
         tmp_path / "app.db",
     )
 
-    response = client.post(f"/api/tasks/{task['id']}/summarize", json={"lang": "zh-CN"})
+    response = client.post(f"/api/tasks/{task['id']}/summarize", json={"lang": "en"})
 
     assert response.status_code == 503
     assert response.json()["detail"] == "Summarize API key is not configured"
@@ -515,8 +527,8 @@ def test_generate_summarize_endpoint_updates_task_with_model_output(tmp_path, mo
 
         def generate(self, prompt: str, language: str) -> str:
             assert "完整转写内容" in prompt
-            assert language == "zh-CN"
-            return "# 总结\n\n- API 生成的要点\n"
+            assert language == "en"
+            return "# Summary\n\n- Key point\n"
 
     monkeypatch.setenv("PODCAST_NOTEBOOK_LLM_API_KEY", "test-key")
     monkeypatch.setattr(summarizer_module, "SUMMARIES_DIR", tmp_path / "summaries")
@@ -542,9 +554,94 @@ def test_generate_summarize_endpoint_updates_task_with_model_output(tmp_path, mo
         tmp_path / "app.db",
     )
 
-    response = client.post(f"/api/tasks/{task['id']}/summarize", json={"lang": "zh-CN"})
+    response = client.post(f"/api/tasks/{task['id']}/summarize", json={"lang": "en"})
 
     assert response.status_code == 200
     updated = response.json()["task"]
-    assert updated["summarize"].endswith("-summarize.md")
-    assert Path(updated["summarize"]).read_text(encoding="utf-8").startswith("# 总结")
+    assert updated["summarize_en"].endswith("-summarize.en.md")
+    assert Path(updated["summarize_en"]).read_text(encoding="utf-8").startswith("# Summary")
+
+
+@pytest.fixture
+def summary_api(tmp_path, monkeypatch):
+    import backend.codex_summaries as summaries
+
+    db_path = tmp_path / "app.db"
+    client = TestClient(create_app(db_path=db_path, executor=NoopExecutor()))
+    transcript = tmp_path / "transcript.txt"
+    transcript.write_text("完整转写内容", encoding="utf-8")
+    task = create_task({
+        "podcast_title": "测试播客", "episode_title": "单集",
+        "rss_url": "http://example.com/feed", "audio_url": "http://example.com/audio.mp3",
+        "status": "completed", "output_txt_path": str(transcript),
+    }, db_path)
+    monkeypatch.setattr(summaries, "SUMMARIES_DIR", tmp_path / "summaries")
+    return client, task, db_path
+
+
+@pytest.mark.parametrize("kind,field,other", [
+    ("brief", "summarize_brief", "summarize"), ("detail", "summarize", "summarize_brief"),
+])
+def test_chinese_buttons_generate_only_selected_kind_with_codex(summary_api, monkeypatch, kind, field, other):
+    import backend.codex_summaries as summaries
+
+    calls = []
+
+    class FakeCodex:
+        skill_path = Path("/test/humanizer-zh/SKILL.md")
+
+        def generate(self, prompt, selected):
+            calls.append(selected)
+            assert "$humanizer-zh" in prompt and "完整转写内容" in prompt
+            return {selected: "主要观点。" if selected == "brief" else "# 长版\n\n观点与依据。"}
+
+    monkeypatch.setattr(summaries, "CodexSummaryClient", FakeCodex)
+    client, task, db_path = summary_api
+    url = f"/api/tasks/{task['id']}/summarize"
+    response = client.post(url, json={"lang": "zh-CN", "kind": kind})
+    assert response.status_code == 200
+    updated = get_task(task["id"], db_path)
+    assert Path(updated[field]).is_file()
+    assert not updated[other] and not updated["summarize_en"]
+    assert calls == [kind]
+    assert client.post(url, json={"kind": kind}).status_code == 409
+    assert calls == [kind]
+    file = client.get(url).json()
+    if kind == "brief":
+        assert file["brief_content"] == "主要观点。\n"
+        assert file["content"] == ""
+    else:
+        assert file["content"].startswith("# 长版")
+
+
+@pytest.mark.parametrize("body", [{"kind": "both"}, {"lang": "en", "kind": "brief"}])
+def test_summary_api_rejects_unsupported_kind(summary_api, body):
+    client, task, _ = summary_api
+    assert client.post(f"/api/tasks/{task['id']}/summarize", json=body).status_code == 422
+
+
+def test_summary_api_requires_existing_completed_task_and_transcript(summary_api):
+    client, task, db_path = summary_api
+    assert client.post("/api/tasks/99999/summarize", json={"kind": "brief"}).status_code == 404
+    for values in ({"status": "queued"}, {"status": "completed", "output_txt_path": "/missing.txt"}):
+        update_task(task["id"], values, db_path)
+        assert client.post(f"/api/tasks/{task['id']}/summarize", json={"kind": "brief"}).status_code == 422
+
+
+@pytest.mark.parametrize("error,status", [("config", 503), ("provider", 502)])
+def test_codex_failures_are_reported_without_publishing(summary_api, monkeypatch, error, status):
+    import backend.codex_summaries as summaries
+    from backend.summarizer import SummaryNotConfiguredError, SummaryProviderError
+
+    class FailedCodex:
+        skill_path = Path("/test/humanizer-zh/SKILL.md")
+
+        def generate(self, prompt, kind):
+            exception = SummaryNotConfiguredError if error == "config" else SummaryProviderError
+            raise exception("Cannot generate")
+
+    monkeypatch.setattr(summaries, "CodexSummaryClient", FailedCodex)
+    client, task, db_path = summary_api
+    response = client.post(f"/api/tasks/{task['id']}/summarize", json={"kind": "brief"})
+    assert response.status_code == status
+    assert not get_task(task["id"], db_path)["summarize_brief"]

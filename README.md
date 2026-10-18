@@ -224,17 +224,35 @@ Run the maintenance helper:
 .venv/bin/python scripts/maintain_tasks.py
 ```
 
-The project includes two cron-friendly scripts:
+The project includes three cron-friendly scripts:
 
 - `scripts/check_subscriptions.py` checks configured podcast subscriptions and creates tasks for new episodes through the running local web app.
 - `scripts/maintain_tasks.py` restarts stale tasks through the running local web app, so it behaves like clicking retry in the frontend; it does not wait for download or transcription to finish. It also deletes task audio after the generated summary has existed for more than 24 hours.
+- `scripts/generate_summaries.py` fills missing Chinese short/long summaries for completed tasks with a transcript. Each Codex CLI call generates exactly one version (`gpt-6.1-sol`, reasoning `low`) and directly invokes the installed `humanizer-zh` skill. By default, each task generates its missing short version and then its missing long version in separate calls. Existing summaries are preserved. The page has separate “生成短版” and “生成长版” buttons using the same Codex flow; the dialog shows the short version first and lets you expand the long version when present. English summaries keep their current behavior.
+
+Try selected tasks first (requires authenticated `codex` on `PATH`):
+
+```bash
+.venv/bin/python scripts/generate_summaries.py --task-id 924 --task-id 892 --task-id 952 --workers 1
+# Generate only a short version for one selected task:
+.venv/bin/python scripts/generate_summaries.py --task-id 952 --kind brief
+```
+
+For scheduled runs, record the current maximum task ID once when enabling the schedule, then use `--after-task-id <that-id> --workers 2`. Keep this boundary fixed: tasks with IDs at or below it are excluded even if they finish transcription later. Tasks created afterward become eligible when their transcripts are ready, and failures retry on subsequent runs. `--after-task-id 0` supports an empty database. `--all` remains an explicit manual option for historical backfills.
+
+Scheduled runs (`--after-task-id`) only generate summaries for episodes lasting 30–180 minutes, including both endpoints, using the stored `audio_duration_seconds`. Episodes outside this range or with unknown/invalid durations are logged and skipped without failing the run or blocking other tasks. Manual page buttons, `--task-id`, and `--all` do not apply this duration limit.
+
+The default is one worker and a 600-second timeout per call. `--kind brief` or `--kind detail` restricts the run to one version. `--db-path` selects a database; `--humanizer-skill` overrides the default `~/.agents/skills/humanizer-zh/SKILL.md`. Missing skills, provider errors, and invalid output fail explicitly without publishing incomplete text. A failed version does not prevent the other version or other tasks from running; successful versions are retained and only missing versions retry next time. Failures appear in task events and give a nonzero exit code. A database-specific file lock skips overlapping runs. This script exits after the selected batch and does not install a schedule.
 
 They can be scheduled with crontab. Replace `<schedule>` with the timing you want:
 
 ```cron
 <schedule> cd /path/to/podcast_notebook && .venv/bin/python scripts/check_subscriptions.py >> /tmp/podcast_notebook_logs/check_subscriptions.log 2>&1
 <schedule> cd /path/to/podcast_notebook && .venv/bin/python scripts/maintain_tasks.py >> /tmp/podcast_notebook_logs/maintain_tasks.log 2>&1
+*/5 * * * * cd /path/to/podcast_notebook && PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin" .venv/bin/python scripts/generate_summaries.py --after-task-id <fixed-task-id> --workers 2 >> /tmp/podcast_notebook_logs/generate_summaries.log 2>&1
 ```
+
+The summary schedule uses the same crontab as subscription checks. Ensure the log directory exists and `codex` is on the cron command's `PATH`; the local install is in `~/.local/bin`. The web server is managed separately by a macOS LaunchAgent.
 
 ## Project map
 

@@ -7,6 +7,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, StrictBool
 
+from backend.codex_summaries import SUMMARY_FIELDS, SummaryKind, generate_task_summary, needs_summary
 from backend.db import get_task, init_db, list_task_events
 from backend.podcast_search import search_podcasts
 from backend.rss import fetch_episodes
@@ -37,6 +38,7 @@ FRONTEND_DIR = ROOT_DIR / "frontend"
 
 class SummarizeGenerateRequest(BaseModel):
     lang: str = "zh-CN"
+    kind: SummaryKind = "detail"
 
 
 class FavoriteUpdateRequest(BaseModel):
@@ -118,6 +120,12 @@ def create_app(db_path: str | Path | None = None, executor: ThreadPoolExecutor |
     def task_summarize(task_id: int, lang: str = "zh-CN") -> dict[str, Any]:
         field = "summarize_en" if lang == "en" else "summarize"
         summarize = get_task_text_file(task_id, field, app.state.db_path)
+        if lang != "en":
+            brief = get_task_text_file(task_id, "summarize_brief", app.state.db_path)
+            if brief is not None:
+                if summarize is None:
+                    summarize = {"title": brief["title"], "content": "", "path": ""}
+                summarize["brief_content"] = brief["content"]
         if summarize is None:
             raise HTTPException(status_code=404, detail="Summarize not found")
         return summarize
@@ -125,7 +133,21 @@ def create_app(db_path: str | Path | None = None, executor: ThreadPoolExecutor |
     @app.post("/api/tasks/{task_id}/summarize")
     def task_generate_summarize(task_id: int, payload: SummarizeGenerateRequest) -> dict[str, Any]:
         try:
-            task = generate_task_summarize(task_id, payload.lang, app.state.db_path)
+            if payload.lang == "en":
+                if payload.kind != "detail":
+                    raise HTTPException(status_code=422, detail="English only supports detail summaries")
+                task = generate_task_summarize(task_id, payload.lang, app.state.db_path)
+            else:
+                existing = get_task(task_id, app.state.db_path)
+                if existing is None:
+                    raise SummaryTaskNotFoundError("Task not found")
+                if existing.get(SUMMARY_FIELDS[payload.kind]):
+                    raise SummaryAlreadyExistsError("Summary already exists")
+                if not needs_summary(existing, payload.kind):
+                    raise SummaryTranscriptMissingError("A completed task with a transcript is required")
+                task = generate_task_summary(task_id, payload.kind, app.state.db_path)
+                if task is None:
+                    raise SummaryAlreadyExistsError("Task changed during summary generation; refresh and retry")
         except SummaryTaskNotFoundError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
         except SummaryAlreadyExistsError as exc:
