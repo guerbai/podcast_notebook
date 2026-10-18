@@ -462,7 +462,7 @@ def _raise_if_cancel_requested(task_id: int, db_path: str | Path) -> None:
 
 
 def _cleanup_task_files(task: dict[str, Any]) -> None:
-    for file_key in ("audio_file_path", "output_txt_path", "summary_md_path", "shownotes", "summarize", "summarize_en"):
+    for file_key in ("audio_file_path", "output_txt_path", "summary_md_path", "shownotes", "summarize", "summarize_brief", "summarize_en"):
         _delete_file_reference(task.get(file_key))
 
 

@@ -10,6 +10,21 @@ def test_init_db_creates_task_storage(tmp_path):
     assert tasks == []
 
 
+def test_migration_adds_empty_brief_without_changing_existing_long(tmp_path):
+    db_path = tmp_path / "legacy.db"
+    legacy_schema = SCHEMA.replace("    summarize_brief TEXT NOT NULL DEFAULT '',\n", "")
+    with sqlite3.connect(db_path) as connection:
+        connection.executescript(legacy_schema)
+        connection.execute(
+            "INSERT INTO tasks (podcast_title, rss_url, episode_title, audio_url, summarize) VALUES (?, ?, ?, ?, ?)",
+            ("播客", "feed", "单集", "audio", "/existing.md"),
+        )
+    init_db(db_path)
+    task = list_tasks(db_path)[0]
+    assert task["summarize"] == "/existing.md"
+    assert task["summarize_brief"] == ""
+
+
 def test_init_db_migrates_existing_tasks_to_unfavorited(tmp_path):
     db_path = tmp_path / "app.db"
     legacy_schema = SCHEMA.replace(
@@ -105,6 +120,7 @@ def test_create_task_stores_shownotes_reference(tmp_path):
             "audio_url": "http://example.com/audio.mp3",
             "shownotes": "/tmp/shownotes.txt",
             "summarize": "/tmp/summarize.md",
+            "summarize_brief": "/tmp/brief.md",
             "summarize_en": "/tmp/summarize.en.md",
             "audio_duration_seconds": 95.5,
         },
@@ -113,5 +129,6 @@ def test_create_task_stores_shownotes_reference(tmp_path):
 
     assert task["shownotes"] == "/tmp/shownotes.txt"
     assert task["summarize"] == "/tmp/summarize.md"
+    assert task["summarize_brief"] == "/tmp/brief.md"
     assert task["summarize_en"] == "/tmp/summarize.en.md"
     assert task["audio_duration_seconds"] == 95.5

@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS tasks (
     audio_duration_seconds REAL,
     shownotes TEXT NOT NULL DEFAULT '',
     summarize TEXT NOT NULL DEFAULT '',
+    summarize_brief TEXT NOT NULL DEFAULT '',
     summarize_en TEXT NOT NULL DEFAULT '',
     status TEXT NOT NULL DEFAULT 'queued',
     progress_stage TEXT NOT NULL DEFAULT 'queued',
@@ -57,6 +58,7 @@ TASK_MIGRATIONS = {
     "summary_md_path": "ALTER TABLE tasks ADD COLUMN summary_md_path TEXT",
     "shownotes": "ALTER TABLE tasks ADD COLUMN shownotes TEXT NOT NULL DEFAULT ''",
     "summarize": "ALTER TABLE tasks ADD COLUMN summarize TEXT NOT NULL DEFAULT ''",
+    "summarize_brief": "ALTER TABLE tasks ADD COLUMN summarize_brief TEXT NOT NULL DEFAULT ''",
     "summarize_en": "ALTER TABLE tasks ADD COLUMN summarize_en TEXT NOT NULL DEFAULT ''",
     "audio_duration_seconds": "ALTER TABLE tasks ADD COLUMN audio_duration_seconds REAL",
 }
@@ -147,6 +149,7 @@ def create_task(task: dict[str, Any], db_path: str | Path | None = None) -> dict
         "audio_duration_seconds": task.get("audio_duration_seconds"),
         "shownotes": task.get("shownotes", ""),
         "summarize": task.get("summarize", ""),
+        "summarize_brief": task.get("summarize_brief", ""),
         "summarize_en": task.get("summarize_en", ""),
         "status": task.get("status", "queued"),
         "progress_stage": task.get("progress_stage", "queued"),
@@ -168,13 +171,13 @@ def create_task(task: dict[str, Any], db_path: str | Path | None = None) -> dict
             """
             INSERT INTO tasks (
                 podcast_title, rss_url, episode_title, episode_guid, audio_url,
-                audio_duration_seconds, shownotes, summarize, summarize_en, status, progress_stage,
+                audio_duration_seconds, shownotes, summarize, summarize_brief, summarize_en, status, progress_stage,
                 progress_percent, download_percent, transcription_percent, cancel_requested, pending_action,
                 audio_file_path, output_txt_path, summary_md_path, error_message, created_at, started_at, finished_at
             )
             VALUES (
                 :podcast_title, :rss_url, :episode_title, :episode_guid, :audio_url,
-                :audio_duration_seconds, :shownotes, :summarize, :summarize_en, :status, :progress_stage,
+                :audio_duration_seconds, :shownotes, :summarize, :summarize_brief, :summarize_en, :status, :progress_stage,
                 :progress_percent, :download_percent, :transcription_percent, :cancel_requested, :pending_action,
                 :audio_file_path, :output_txt_path, :summary_md_path, :error_message, :created_at, :started_at, :finished_at
             )
@@ -208,6 +211,29 @@ def update_task(
     if task is None:
         raise KeyError(task_id)
     return task
+
+
+def fill_missing_summaries(
+    task_id: int,
+    transcript_path: str,
+    summaries: dict[str, str],
+    db_path: str | Path | None = None,
+) -> dict[str, Any] | None:
+    if not summaries or not summaries.keys() <= {"summarize", "summarize_brief"}:
+        raise ValueError("Expected Chinese summary paths")
+    # A manual generation may finish while Codex is running. Filled fields win.
+    assignments = ", ".join(
+        f"{field} = CASE WHEN COALESCE({field}, '') = '' THEN :{field} ELSE {field} END"
+        for field in summaries
+    )
+    with connect_db(db_path) as connection:
+        connection.execute(
+            f"UPDATE tasks SET {assignments} "
+            "WHERE id = :task_id AND status = 'completed' AND output_txt_path = :transcript_path",
+            {**summaries, "task_id": task_id, "transcript_path": transcript_path},
+        )
+        row = connection.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
+    return dict(row) if row else None
 
 
 def add_task_event(

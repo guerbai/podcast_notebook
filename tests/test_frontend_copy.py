@@ -62,8 +62,8 @@ def test_frontend_exposes_language_toggle_and_i18n_dictionaries():
     assert 'lang=${state.language}' in script
     assert "播客笔记本" in script
     assert "Podcast Notebook" in script
-    assert "/static/app.js?v=20260830-summary-modal-poll" in html
-    assert "/static/styles.css?v=20260927-impeccable-workbench" in html
+    assert "/static/app.js?v=20261018-split-summaries" in html
+    assert "/static/styles.css?v=20261018-split-summaries" in html
 
 
 def test_frontend_chinese_copy_omits_sentence_periods():
@@ -369,17 +369,11 @@ def test_frontend_exposes_manual_summarize_generation_for_eligible_tasks():
     assert "Summary generated." in script
     assert 'data-action="generate-summarize"' in script
     assert "const SUMMARIZE_LOCK_TTL_MS = 10 * 60 * 1000" in script
-    assert "function summarizeLockKey(taskId, language)" in script
-    assert "function isSummarizeLocked(taskId, language)" in script
-    assert "function setSummarizeLock(taskId, language)" in script
-    assert "function clearSummarizeLock(taskId, language)" in script
-    assert "localStorage.setItem(summarizeLockKey(taskId, language), String(Date.now() + SUMMARIZE_LOCK_TTL_MS))" in script
-    assert "Boolean(task.output_txt_path) && !hasLocalizedSummarize && !isSummarizeLockedForLanguage" in script
-    assert 'isSummarizeLockedForLanguage ? t("generatingSummarize")' in script
+    assert "function summarizeLockKey(taskId, language, kind)" in script
+    assert "生成短版" in script and "生成长版" in script
+    assert 'data-summary-kind="${version.kind}"' in script
     assert 'fetchJson(`/api/tasks/${task.id}/summarize`, {' in script
-    assert "body: JSON.stringify({ lang: state.language })" in script
-    assert "setSummarizeLock(task.id, state.language)" in script
-    assert "clearSummarizeLock(task.id, state.language)" in script
+    assert "body: JSON.stringify({ lang: language, kind })" in script
     assert 'showToast(t("summarizeGenerated"), "success")' in script
 
 
@@ -409,13 +403,6 @@ def test_frontend_task_detail_displays_audio_duration():
     assert ".ledger-side__duration" in styles
     assert ".ledger-side__duration-value" not in styles
     assert ".ledger-side__duration strong" not in styles
-
-
-def test_frontend_generated_summary_takes_priority_over_local_lock():
-    script = Path("frontend/app.js").read_text(encoding="utf-8")
-
-    assert "const isSummarizeLockedForLanguage = !hasLocalizedSummarize && isSummarizeLocked(task.id, state.language)" in script
-    assert "if (hasLocalizedSummarize) {\n    clearSummarizeLock(task.id, state.language);\n  }" in script
 
 
 def test_frontend_pauses_task_polling_while_summary_modal_is_open():

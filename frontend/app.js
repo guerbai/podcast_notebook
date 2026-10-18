@@ -57,6 +57,12 @@ const TRANSLATIONS = {
     keepTask: "先保留",
     confirmArchive: "确认归档",
     summaryKicker: "节目总结",
+    fullSummary: "长版总结",
+    briefSummary: "短版总结",
+    generateBriefSummary: "生成短版",
+    generateFullSummary: "生成长版",
+    generatingBriefSummary: "正在生成短版…",
+    generatingFullSummary: "正在生成长版…",
     summaryTitle: "总结内容",
     close: "关闭",
     heroTitle: "播客笔记本",
@@ -182,6 +188,7 @@ const TRANSLATIONS = {
     keepTask: "Keep task",
     confirmArchive: "Archive",
     summaryKicker: "Episode Summary",
+    fullSummary: "Full summary",
     summaryTitle: "Summary",
     close: "Close",
     heroTitle: "Podcast Notebook",
@@ -478,28 +485,28 @@ function clearTaskFileCache(taskId) {
   state.taskFiles.delete(`summarize:${taskId}:en`);
 }
 
-function summarizeLockKey(taskId, language) {
-  return `podcast-notebook-summarize-lock:${taskId}:${language}`;
+function summarizeLockKey(taskId, language, kind) {
+  return `podcast-notebook-summarize-lock:${taskId}:${language}:${kind}`;
 }
 
-function isSummarizeLocked(taskId, language) {
-  const expiresAt = Number(localStorage.getItem(summarizeLockKey(taskId, language)) || 0);
+function isSummarizeLocked(taskId, language, kind) {
+  const expiresAt = Number(localStorage.getItem(summarizeLockKey(taskId, language, kind)) || 0);
   if (!expiresAt) {
     return false;
   }
   if (Date.now() >= expiresAt) {
-    clearSummarizeLock(taskId, language);
+    clearSummarizeLock(taskId, language, kind);
     return false;
   }
   return true;
 }
 
-function setSummarizeLock(taskId, language) {
-  localStorage.setItem(summarizeLockKey(taskId, language), String(Date.now() + SUMMARIZE_LOCK_TTL_MS));
+function setSummarizeLock(taskId, language, kind) {
+  localStorage.setItem(summarizeLockKey(taskId, language, kind), String(Date.now() + SUMMARIZE_LOCK_TTL_MS));
 }
 
-function clearSummarizeLock(taskId, language) {
-  localStorage.removeItem(summarizeLockKey(taskId, language));
+function clearSummarizeLock(taskId, language, kind) {
+  localStorage.removeItem(summarizeLockKey(taskId, language, kind));
 }
 
 function highlightTask(taskId) {
@@ -1001,24 +1008,25 @@ async function toggleTaskFavorite(task) {
   }
 }
 
-async function generateSummarize(task) {
-  setSummarizeLock(task.id, state.language);
+async function generateSummarize(task, kind) {
+  const language = state.language;
+  setSummarizeLock(task.id, language, kind);
   setTaskPending(task.id, true);
   renderTasks();
   try {
     const result = await fetchJson(`/api/tasks/${task.id}/summarize`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ lang: state.language }),
+      body: JSON.stringify({ lang: language, kind }),
     });
     state.taskDetails.delete(task.id);
     clearTaskFileCache(task.id);
-    clearSummarizeLock(task.id, state.language);
+    clearSummarizeLock(task.id, language, kind);
     showToast(t("summarizeGenerated"), "success");
     await loadTasks();
     highlightTask(result.task.id);
   } catch (error) {
-    clearSummarizeLock(task.id, state.language);
+    clearSummarizeLock(task.id, language, kind);
     showToast(error.message, "error");
   } finally {
     setTaskPending(task.id, false);
@@ -1058,11 +1066,25 @@ async function openTaskFile(task, type) {
     }
     summaryKicker.textContent = labels[type] || type;
     summaryTitle.textContent = `${file.title} · ${labels[type] || type}`;
-    summaryContent.innerHTML = type === "summarize" ? renderMarkdown(file.content) : renderPlainText(file.content);
+    summaryContent.innerHTML = type === "summarize" ? renderSummarize(file) : renderPlainText(file.content);
     openSummaryModal();
   } catch (error) {
     showToast(error.message, "error");
   }
+}
+
+function renderSummarize(file) {
+  if (state.language === "en" || !file.brief_content?.trim()) {
+    return renderMarkdown(file.content);
+  }
+  if (!file.content?.trim()) {
+    return renderMarkdown(file.brief_content);
+  }
+  return `${renderMarkdown(file.brief_content)}
+    <details class="summary-detail">
+      <summary>${escapeHtml(t("fullSummary"))}</summary>
+      ${renderMarkdown(file.content)}
+    </details>`;
 }
 
 async function loadTaskDetail(taskId) {
@@ -1089,6 +1111,21 @@ function renderProgressRow(label, value, modifier) {
   `;
 }
 
+function summaryVersions(task) {
+  const versions = state.language === "en"
+    ? [{ kind: "detail", field: "summarize_en", title: "summarize", generate: "generateSummarize", generating: "generatingSummarize" }]
+    : [
+      { kind: "brief", field: "summarize_brief", title: "briefSummary", generate: "generateBriefSummary", generating: "generatingBriefSummary" },
+      { kind: "detail", field: "summarize", title: "fullSummary", generate: "generateFullSummary", generating: "generatingFullSummary" },
+    ];
+  return versions.map((version) => {
+    const exists = Boolean(task[version.field]);
+    if (exists) clearSummarizeLock(task.id, state.language, version.kind);
+    const locked = !exists && isSummarizeLocked(task.id, state.language, version.kind);
+    return { ...version, exists, locked };
+  });
+}
+
 function renderTask(task) {
   const article = document.createElement("article");
   article.className = `ledger-entry ${state.highlightedTaskId === task.id ? "ledger-entry--highlighted" : ""}`;
@@ -1096,13 +1133,9 @@ function renderTask(task) {
 
   const isExpanded = state.expandedTaskIds.has(task.id);
   const isPending = state.pendingActionTaskIds.has(task.id);
-  const hasLocalizedSummarize = state.language === "en" ? Boolean(task.summarize_en) : Boolean(task.summarize);
-  if (hasLocalizedSummarize) {
-    clearSummarizeLock(task.id, state.language);
-  }
-  const isSummarizeLockedForLanguage = !hasLocalizedSummarize && isSummarizeLocked(task.id, state.language);
-  const canGenerateSummarize = task.status !== "archived" && Boolean(task.output_txt_path) && !hasLocalizedSummarize && !isSummarizeLockedForLanguage;
-  const summarizeLabel = isSummarizeLockedForLanguage ? t("generatingSummarize") : hasLocalizedSummarize ? t("generated") : t("notGenerated");
+  const versions = summaryVersions(task);
+  const hasLocalizedSummarize = versions.some((version) => version.exists);
+  const canGenerateSummarize = task.status === "completed" && Boolean(task.output_txt_path);
   const durationClass = hasAudioDuration(task.audio_duration_seconds) ? "" : " is-missing";
   const favoriteLabel = task.is_favorite ? t("unfavorite") : t("favorite");
   const favoriteClass = task.is_favorite ? " is-active" : "";
@@ -1133,7 +1166,7 @@ function renderTask(task) {
 
     <div class="ledger-meta">
       <span>${escapeHtml(t("stage"))}: ${escapeHtml(formatStage(task))}</span>
-      <span>${escapeHtml(t("summarize"))}: ${escapeHtml(summarizeLabel)}</span>
+      ${versions.map((version) => `<span>${escapeHtml(t(version.title))}: ${escapeHtml(version.locked ? t(version.generating) : t(version.exists ? "generated" : "notGenerated"))}</span>`).join("")}
     </div>
 
     <div class="ledger-progress">
@@ -1146,8 +1179,9 @@ function renderTask(task) {
       ${task.summary_md_path ? `<button type="button" class="ghost-button" data-action="summary">${escapeHtml(t("viewSummary"))}</button>` : ""}
       ${task.shownotes ? `<button type="button" class="ghost-button" data-action="shownotes">${escapeHtml(t("viewShownotes"))}</button>` : ""}
       ${hasLocalizedSummarize ? `<button type="button" class="ghost-button" data-action="summarize">${escapeHtml(t("viewSummarize"))}</button>` : ""}
-      ${isSummarizeLockedForLanguage ? `<button type="button" class="ghost-button" disabled>${escapeHtml(t("generatingSummarize"))}</button>` : ""}
-      ${canGenerateSummarize ? `<button type="button" class="ghost-button" data-action="generate-summarize" ${isPending ? "disabled" : ""}>${escapeHtml(isPending ? t("generatingSummarize") : t("generateSummarize"))}</button>` : ""}
+      ${versions.filter((version) => !version.exists && (canGenerateSummarize || version.locked)).map((version) => `
+        <button type="button" class="ghost-button" data-action="generate-summarize" data-summary-kind="${version.kind}" ${isPending || version.locked ? "disabled" : ""}>${escapeHtml(t(version.locked ? version.generating : version.generate))}</button>
+      `).join("")}
     </div>
 
     <section class="ledger-detail-panel ${isExpanded ? "is-open" : ""}">
@@ -1159,7 +1193,9 @@ function renderTask(task) {
   article.querySelector('[data-action="summary"]')?.addEventListener("click", () => openTaskSummary(task));
   article.querySelector('[data-action="shownotes"]')?.addEventListener("click", () => openTaskFile(task, "shownotes"));
   article.querySelector('[data-action="summarize"]')?.addEventListener("click", () => openTaskFile(task, "summarize"));
-  article.querySelector('[data-action="generate-summarize"]')?.addEventListener("click", () => generateSummarize(task));
+  article.querySelectorAll('[data-action="generate-summarize"]').forEach((button) => {
+    button.addEventListener("click", () => generateSummarize(task, button.dataset.summaryKind));
+  });
   article.querySelector('[data-action="favorite"]')?.addEventListener("click", () => toggleTaskFavorite(task));
   article.querySelector('[data-action="restart"]')?.addEventListener("click", () => restartTask(task.id));
   article.querySelector('[data-action="archive"]')?.addEventListener("click", () => openArchiveModal(task.id));
@@ -1238,6 +1274,13 @@ function toggleTaskDetail(taskId) {
 async function loadTasks() {
   try {
     const data = await fetchJson("/api/tasks");
+    const previousTasks = new Map(state.tasks.map((task) => [task.id, task]));
+    for (const task of data.items || []) {
+      const previous = previousTasks.get(task.id);
+      if (previous && ["summarize", "summarize_brief", "summarize_en"].some((field) => previous[field] !== task[field])) {
+        clearTaskFileCache(task.id);
+      }
+    }
     state.tasks = data.items || [];
     syncTaskFilterControls();
     syncTimeFilterOptions();
