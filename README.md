@@ -238,7 +238,7 @@ Try selected tasks first (requires authenticated `codex` on `PATH`):
 .venv/bin/python scripts/generate_summaries.py --task-id 952 --kind brief
 ```
 
-For scheduled runs, record the current maximum task ID once when enabling the schedule, then use `--after-task-id <that-id> --workers 2`. Keep this boundary fixed: tasks with IDs at or below it are excluded even if they finish transcription later. Tasks created afterward become eligible when their transcripts are ready, and failures retry on subsequent runs. `--after-task-id 0` supports an empty database. `--all` remains an explicit manual option for historical backfills.
+For scheduled runs, record the current maximum task ID once when enabling the schedule, then use `--after-task-id <that-id> --workers 2 --kind brief` to automatically generate only missing short summaries. Long summaries remain available through the manual page button or `--kind detail`. Keep this boundary fixed: tasks with IDs at or below it are excluded even if they finish transcription later. Tasks created afterward become eligible when their transcripts are ready, and failures retry on subsequent runs. `--after-task-id 0` supports an empty database. `--all` remains an explicit manual option for historical backfills.
 
 Scheduled runs (`--after-task-id`) only generate summaries for episodes lasting 30–180 minutes, including both endpoints, using the stored `audio_duration_seconds`. Episodes outside this range or with unknown/invalid durations are logged and skipped without failing the run or blocking other tasks. Manual page buttons, `--task-id`, and `--all` do not apply this duration limit.
 
@@ -249,7 +249,7 @@ They can be scheduled with crontab. Replace `<schedule>` with the timing you wan
 ```cron
 <schedule> cd /path/to/podcast_notebook && .venv/bin/python scripts/check_subscriptions.py >> /tmp/podcast_notebook_logs/check_subscriptions.log 2>&1
 <schedule> cd /path/to/podcast_notebook && .venv/bin/python scripts/maintain_tasks.py >> /tmp/podcast_notebook_logs/maintain_tasks.log 2>&1
-*/5 * * * * cd /path/to/podcast_notebook && PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin" .venv/bin/python scripts/generate_summaries.py --after-task-id <fixed-task-id> --workers 2 >> /tmp/podcast_notebook_logs/generate_summaries.log 2>&1
+*/5 * * * * cd /path/to/podcast_notebook && PATH="$HOME/.local/bin:/opt/homebrew/bin:/usr/bin:/bin" .venv/bin/python scripts/generate_summaries.py --after-task-id <fixed-task-id> --workers 2 --kind brief >> /tmp/podcast_notebook_logs/generate_summaries.log 2>&1
 ```
 
 The summary schedule uses the same crontab as subscription checks. Ensure the log directory exists and `codex` is on the cron command's `PATH`; the local install is in `~/.local/bin`. The web server is managed separately by a macOS LaunchAgent.
